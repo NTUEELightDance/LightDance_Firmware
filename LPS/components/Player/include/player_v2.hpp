@@ -27,7 +27,10 @@ class Player {
     esp_err_t play();
     esp_err_t pause();
     esp_err_t reset();
+    esp_err_t release();
+    esp_err_t load();
     esp_err_t test(uint8_t, uint8_t, uint8_t);
+    esp_err_t exit();
 
     // ===== Called by State =====
 
@@ -41,6 +44,11 @@ class Player {
 
     void changeState(State& newState);
 
+    // ===== Resource Management =====
+
+    esp_err_t acquireResources();
+    esp_err_t releaseResources();
+
   private:
     Player();
     ~Player();
@@ -52,11 +60,6 @@ class Player {
     void Loop();
 
     esp_err_t sendEvent(Event& e);  // always safe, returns error
-
-    // ===== Resource Management =====
-
-    esp_err_t acquireResources();
-    esp_err_t releaseResources();
 
   private:
     // ===== FSM =====

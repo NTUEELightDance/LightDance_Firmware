@@ -21,7 +21,7 @@ Player::~Player() = default;
 esp_err_t Player::init() {
     ESP_RETURN_ON_FALSE(!taskAlive, ESP_ERR_INVALID_STATE, TAG, "player already started");
 
-    currentState = &ReadyState::getInstance();
+    currentState = &UnloadedState::getInstance();
     return createTask();
 }
 
@@ -51,12 +51,30 @@ esp_err_t Player::reset() {
     return sendEvent(e);
 }
 
+esp_err_t Player::release() {
+    Event e{};
+    e.type = EVENT_RELEASE;
+    return sendEvent(e);
+}
+
+esp_err_t Player::load() {
+    Event e{};
+    e.type = EVENT_LOAD;
+    return sendEvent(e);
+}
+
 esp_err_t Player::test(uint8_t r, uint8_t g, uint8_t b) {
     Event e{};
     e.type = EVENT_TEST;
     e.test_data.r = r;
     e.test_data.g = g;
     e.test_data.b = b;
+    return sendEvent(e);
+}
+
+esp_err_t Player::exit() {
+    Event e{};
+    e.type = EVENT_EXIT;
     return sendEvent(e);
 }
 
@@ -125,20 +143,16 @@ esp_err_t Player::createTask() {
 
 void Player::taskEntry(void* pvParameters) {
     Player& p = Player::getInstance();
+    p.currentState->enter(p);
 
-    if(p.acquireResources() != ESP_OK) {
-        ESP_LOGE(TAG, "resource acquire failed");
-        p.taskAlive = false;
-        vTaskDelete(nullptr);
-    }
+    Event bootEvent;
+    bootEvent.type = EVENT_LOAD;
+    p.currentState->handleEvent(p, bootEvent);
 
     p.Loop();
 }
 
 void Player::Loop() {
-
-    currentState->enter(*this);
-
     Event e{};
     uint32_t ulNotifiedValue;
     bool running = true;
@@ -162,6 +176,10 @@ void Player::Loop() {
     }
 
     releaseResources();
+    if(eventQueue) {
+        vQueueDelete(eventQueue);
+        eventQueue = nullptr;
+    }
     taskAlive = false;
     ESP_LOGI(TAG, "player task exit");
     vTaskDelete(NULL);
@@ -209,10 +227,10 @@ esp_err_t Player::releaseResources() {
     fb.deinit();
     controller.deinit();
 
-    if(eventQueue) {
-        vQueueDelete(eventQueue);
-        eventQueue = nullptr;
-    }
+    // if(eventQueue) {
+    //     vQueueDelete(eventQueue);
+    //     eventQueue = nullptr;
+    // }
 
     resources_acquired = false;
     return ESP_OK;

@@ -16,23 +16,14 @@ class State {
     State() = default;
 };
 
-// class ErrorState: public State {
-//   public:
-//     static ErrorState& getInstance();
-//     void enter(Player& player) override;
-//     void exit(Player& player) override;
-//     void handleEvent(Player& player, Event& event) override;
-//     void update(Player& player) override;
-// };
-
-// class ResetState: public State {
-//   public:
-//     static ResetState& getInstance();
-//     void enter(Player& player) override;
-//     void exit(Player& player) override;
-//     void handleEvent(Player& player, Event& event) override;
-//     void update(Player& player) override;
-// };
+class UnloadedState: public State {
+  public:
+    static UnloadedState& getInstance();
+    void enter(Player& player) override;
+    void exit(Player& player) override;
+    void handleEvent(Player& player, Event& event) override;
+    void update(Player& player) override;
+};
 
 class ReadyState: public State {
   public:

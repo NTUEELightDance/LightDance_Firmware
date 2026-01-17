@@ -10,6 +10,8 @@ typedef enum {
     EVENT_TEST,
     EVENT_PAUSE,
     EVENT_RESET,
+    EVENT_RELEASE,
+    EVENT_LOAD,
     EVENT_EXIT,
 } event_t;
 

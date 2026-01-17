@@ -2,6 +2,7 @@
 
 #include "algorithm"
 #include "esp_log.h"
+#include <string.h>
 
 static const char* TAG = "fb";
 

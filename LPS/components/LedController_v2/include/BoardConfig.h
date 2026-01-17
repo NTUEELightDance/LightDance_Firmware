@@ -5,7 +5,7 @@
 /**
  * @brief Number of WS2812B LED strip channels controlled by the firmware.
  */
-#define WS2812B_NUM 8
+#define WS2812B_NUM 1
 
 /**
  * @brief Number of Max WS2812B LED per channels controlled by the firmware.
