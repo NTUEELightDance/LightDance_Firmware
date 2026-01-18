@@ -21,7 +21,6 @@ The Player acts as the bridge between your **Data Source** (SD Card/Flash) and t
 
 ```mermaid
 graph TD
-graph TD
     %% High Level API
     User[User Application] -->|"Events: Play/Pause"| Player("04 - Player")
     
