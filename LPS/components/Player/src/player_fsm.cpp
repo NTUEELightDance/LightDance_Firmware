@@ -119,6 +119,8 @@ void Player::processEvent(Event& e) {
                 else
                     ESP_LOGE(TAG, "resource acquire failed");
             }
+            else
+                ESP_LOGW(TAG, "UnloadedState: ignoring event %s", getEventName(e.type));
             break;
 
         case PlayerState::READY:
@@ -140,10 +142,7 @@ void Player::processEvent(Event& e) {
                 switchState(PlayerState::READY);
             else if(e.type == EVENT_RELEASE)
                 switchState(PlayerState::UNLOADED);
-            else if(e.type == EVENT_TEST) {
-                testPlayback(e.test_data.r, e.test_data.g, e.test_data.b);
-                switchState(PlayerState::TEST);
-            } else
+            else
                 ESP_LOGW(TAG, "PlayingState: ignoring event %s", getEventName(e.type));
             break;
 

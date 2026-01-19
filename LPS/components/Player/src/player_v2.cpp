@@ -120,31 +120,25 @@ esp_err_t Player::testPlayback(uint8_t r, uint8_t g, uint8_t b) {
     return ESP_OK;
 }
 
-/* ================= FSM ================= */
-
-// void Player::changeState(State& newState) {
-//     currentState->exit(*this);
-//     currentState = &newState;
-//     currentState->enter(*this);
-// }
-
 /* ================= RTOS ================= */
 
 esp_err_t Player::createTask() {
     BaseType_t res = xTaskCreatePinnedToCore(Player::taskEntry, "PlayerTask", 8192, NULL, 5, &taskHandle, 0);
+    eventQueue = xQueueCreate(50, sizeof(Event));
     ESP_RETURN_ON_FALSE(res == pdPASS, ESP_FAIL, TAG, "create task failed");
-
     taskAlive = true;
     return ESP_OK;
 }
 
 void Player::taskEntry(void* pvParameters) {
+    
     Player& p = Player::getInstance();
+    
     // p.switchState(Player::PlayerState::UNLOADED);
 
-    Event bootEvent;
-    bootEvent.type = EVENT_LOAD;
-    p.processEvent(bootEvent);
+    // Event bootEvent;
+    // bootEvent.type = EVENT_LOAD;
+    // p.processEvent(bootEvent); // auto-load on start
 
     p.Loop();
 }
@@ -204,7 +198,6 @@ esp_err_t Player::acquireResources() {
         ch_info.i2c_leds[i] = 1;
     }
 
-    eventQueue = xQueueCreate(50, sizeof(Event));
     ESP_RETURN_ON_FALSE(eventQueue != nullptr, ESP_ERR_NO_MEM, TAG, "queue alloc failed");
 
     ESP_RETURN_ON_ERROR(controller.init(), TAG, "controller init failed");

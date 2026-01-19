@@ -58,18 +58,22 @@ The Player enforces a strict state lifecycle to prevent undefined behaviors (e.g
 stateDiagram-v2
     [*] --> UNLOADED
     UNLOADED --> READY: load()
+
     READY --> UNLOADED: release()
-    
     READY --> PLAYING: play()
     READY --> TEST: test(r,g,b)
     
     PLAYING --> PAUSED: pause()
     PLAYING --> READY: reset()
+    PLAYING --> UNLOADED: release()
     
     PAUSED --> PLAYING: play()
     PAUSED --> READY: reset()
+    PAUSED --> UNLOADED: release()
     
+    TEST --> TEST: test(r,g,b)
     TEST --> READY: reset()
+    TEST --> UNLOADED: release()
 ```
 
 ---
