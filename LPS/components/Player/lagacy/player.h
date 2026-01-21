@@ -4,7 +4,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 
-#include "LedController_v2.hpp"
+#include "LedController.hpp"
 #include "framebuffer.h"
 
 typedef enum {

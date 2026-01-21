@@ -1,8 +1,10 @@
-#include "framebuffer.h"
+#include "framebuffer.hpp"
 
+#include <string.h>
 #include "algorithm"
 #include "esp_log.h"
-#include <string.h>
+#include "readframe.h"
+
 
 static const char* TAG = "fb";
 
@@ -29,8 +31,8 @@ esp_err_t FrameBuffer::init() {
     memset(&buffer, 0, sizeof(buffer));
 
     count = 0;
-    test_read_frame(current);
-    test_read_frame(next);
+    read_frame(current);
+    read_frame(next);
 
     return ESP_OK;
 }
@@ -44,8 +46,9 @@ esp_err_t FrameBuffer::reset() {
     memset(&buffer, 0, sizeof(buffer));
 
     count = 0;
-    test_read_frame(current);
-    test_read_frame(next);
+    frame_reset();
+    read_frame(current);
+    read_frame(next);
 
     return ESP_OK;
 }
@@ -67,7 +70,7 @@ void FrameBuffer::compute(uint64_t time_ms) {
 
     while(time_ms >= next->timestamp) {
         std::swap(current, next);
-        test_read_frame(next);
+        read_frame(next);
         if(next->timestamp <= current->timestamp) {
             ESP_LOGE(TAG, "Non-monotonic timestamp: current=%" PRIu64 ", next=%" PRIu64, current->timestamp, next->timestamp);
             buffer = current->data;
@@ -166,18 +169,18 @@ static grb8_t green = {.g = brightness, .r = 0, .b = 0};
 static grb8_t blue = {.g = 0, .r = 0, .b = brightness};
 static grb8_t color_pool[3] = {red, green, blue};
 
-void test_read_frame(table_frame_t* p) {
-    p->timestamp = count * 2000;
-    p->fade = true;
-    for(int ch_idx = 0; ch_idx < WS2812B_NUM; ch_idx++) {
-        for(int i = 0; i < ch_info.rmt_strips[ch_idx]; i++) {
-            p->data.ws2812b[ch_idx][i] = grb_lerp_hsv_u8(color_pool[count % 3], color_pool[(count + 1) % 3], i * 255 / ch_info.rmt_strips[ch_idx]);
-        }
-    }
-    for(int ch_idx = 0; ch_idx < PCA9955B_CH_NUM; ch_idx++) {
-        if(ch_info.i2c_leds[ch_idx]) {
-            p->data.pca9955b[ch_idx] = color_pool[count % 3];
-        }
-    }
-    count++;
-}
+// void test_read_frame(table_frame_t* p) {
+//     p->timestamp = count * 2000;
+//     p->fade = true;
+//     for(int ch_idx = 0; ch_idx < WS2812B_NUM; ch_idx++) {
+//         for(int i = 0; i < ch_info.rmt_strips[ch_idx]; i++) {
+//             p->data.ws2812b[ch_idx][i] = grb_lerp_hsv_u8(color_pool[count % 3], color_pool[(count + 1) % 3], i * 255 / ch_info.rmt_strips[ch_idx]);
+//         }
+//     }
+//     for(int ch_idx = 0; ch_idx < PCA9955B_CH_NUM; ch_idx++) {
+//         if(ch_info.i2c_leds[ch_idx]) {
+//             p->data.pca9955b[ch_idx] = color_pool[count % 3];
+//         }
+//     }
+//     count++;
+// }

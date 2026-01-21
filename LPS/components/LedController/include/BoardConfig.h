@@ -10,12 +10,12 @@
 /**
  * @brief Number of Max WS2812B LED per channels controlled by the firmware.
  */
-#define WS2812B_MAX_PIXEL_NUM 300
+#define WS2812B_MAX_PIXEL_NUM 100
 
 /**
  * @brief Number of PCA9955B constant-current LED driver ICs on the I2C bus.
  */
-#define PCA9955B_NUM 6
+#define PCA9955B_NUM 2
 
 /**
  * @brief Total number of PCA9955B hardware LED output channels across all driver ICs.

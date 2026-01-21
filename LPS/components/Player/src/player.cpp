@@ -110,6 +110,8 @@ esp_err_t Player::updatePlayback() {
         controller.write_buffer(i + WS2812B_NUM, (uint8_t*)&buf->pca9955b[i]);
     }
 
+    // print_frame_data(*buf);
+
     controller.show();
     return ESP_OK;
 }
@@ -131,9 +133,9 @@ esp_err_t Player::createTask() {
 }
 
 void Player::taskEntry(void* pvParameters) {
-    
+
     Player& p = Player::getInstance();
-    
+
     // p.switchState(Player::PlayerState::UNLOADED);
 
     // Event bootEvent;
