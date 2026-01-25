@@ -8,6 +8,8 @@
 
 static const char* TAG = "LedController";
 
+bool pca_enable[8] = {0};
+
 LedController::LedController() {}
 
 LedController::~LedController() {}
@@ -35,7 +37,12 @@ esp_err_t LedController::init() {
 
     // 5. Initialize PCA9955B Chips
     for(int i = 0; i < PCA9955B_NUM; i++) {
-        ESP_GOTO_ON_ERROR(pca9955b_init(&pca9955b_devs[i], BOARD_HW_CONFIG.i2c_addrs[i], bus_handle), err, TAG, "Failed to init PCA9955B[%d]", i);
+        if(i2c_master_probe(bus_handle, BOARD_HW_CONFIG.i2c_addrs[i], 100) == ESP_OK) {
+            pca_enable[i] = true;
+            ESP_GOTO_ON_ERROR(pca9955b_init(&pca9955b_devs[i], BOARD_HW_CONFIG.i2c_addrs[i], bus_handle), err, TAG, "Failed to init PCA9955B[%d]", i);
+        } else {
+            ESP_LOGE(TAG, "Fail to find device at address 0x%02x", BOARD_HW_CONFIG.i2c_addrs[i]);
+        }
     }
 
     ESP_LOGI(TAG, "LedController initialized successfully");
@@ -109,6 +116,9 @@ esp_err_t LedController::show() {
 
     // 2. Trigger PCA9955B transmission (Synchronous/Blocking)
     for(int i = 0; i < PCA9955B_NUM / 2; i++) {
+        if(!pca_enable[i]) {
+            continue;
+        }
         err = pca9955b_show(&pca9955b_devs[i]);
         if(err != ESP_OK) {
             ESP_LOGE(TAG, "Failed to show PCA9955B[%d]: %s", i, esp_err_to_name(err));
@@ -137,6 +147,9 @@ esp_err_t LedController::show() {
 
     // 2. Trigger PCA9955B transmission (Synchronous/Blocking)
     for(int i = PCA9955B_NUM / 2; i < PCA9955B_NUM; i++) {
+        if(!pca_enable[i]) {
+            continue;
+        }
         err = pca9955b_show(&pca9955b_devs[i]);
         if(err != ESP_OK) {
             ESP_LOGE(TAG, "Failed to show PCA9955B[%d]: %s", i, esp_err_to_name(err));
@@ -174,6 +187,9 @@ esp_err_t LedController::deinit() {
 
     // 2. Free PCA9955B Devices
     for(int i = 0; i < PCA9955B_NUM; i++) {
+        if(!pca_enable[i]) {
+            continue;
+        }
         if(pca9955b_del(&(pca9955b_devs[i])) != ESP_OK) {
             ESP_LOGW(TAG, "Error deleting PCA9955B[%d]", i);
         }

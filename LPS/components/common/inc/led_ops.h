@@ -1,45 +1,8 @@
 #pragma once
 
-#include <stdbool.h>
-#include <stdint.h>
-
-#include "lut.h"
-
-typedef struct __attribute__((packed)) {
-    uint8_t g, r, b;
-} grb8_t;
-
-typedef struct __attribute__((packed)) {
-    uint16_t h;  // h: 0..1535
-    uint8_t s, v;
-} hsv8_t;
-
-// ============= math helper function =============
-
-inline uint8_t u8_max3(uint8_t a, uint8_t b, uint8_t c) {
-    uint8_t m = (a > b) ? a : b;
-    return (m > c) ? m : c;
-}
-
-inline uint8_t u8_min3(uint8_t a, uint8_t b, uint8_t c) {
-    uint8_t m = (a < b) ? a : b;
-    return (m < c) ? m : c;
-}
-
-// (x * y) / 255 with rounding, inputs 0..255 => output 0..255
-inline uint8_t mul255_u8(uint8_t x, uint8_t y) {
-    return (uint8_t)(((uint16_t)x * (uint16_t)y + 127) / 255);
-}
-
-// (x * y) / 255 with rounding, x up to 255, y up to 255, but return 16-bit if needed
-inline uint16_t mul255_u16(uint16_t x, uint16_t y) {
-    return (uint16_t)((x * y + 127) / 255);
-}
-
-inline uint8_t lerp_u8(uint8_t start, uint8_t end, uint8_t t) {
-    uint16_t val = (uint16_t)start * (255 - t) + (uint16_t)end * t;
-    return (uint8_t)((val + 127) / 255);
-}
+#include "gamma_lut.h"
+#include "led_types.h"
+#include "math_u8.h"
 
 inline uint16_t wrap_h_1536(int32_t h) {
     // normalize to [0,1535]
@@ -57,8 +20,6 @@ inline int16_t shortest_dh_1536(int16_t dh) {
         dh += 1536;
     return dh;
 }
-
-// ============= color function =============
 
 inline hsv8_t grb_to_hsv_u8(grb8_t in) {
     uint8_t r = in.r, g = in.g, b = in.b;
@@ -205,18 +166,20 @@ inline grb8_t grb_lerp_u8(grb8_t start, grb8_t end, uint8_t t) {
     return out;
 }
 
-inline grb8_t gamma_correct_u8(grb8_t in, bool isLED) {
+inline grb8_t grb_gamma_u8(grb8_t in, gamma_set_t set) {
     grb8_t out;
-
-    if(isLED) {
-        out.r = GAMMA_LED_R[in.r];
-        out.g = GAMMA_LED_G[in.g];
-        out.b = GAMMA_LED_B[in.b];
-    } else {
-        out.r = GAMMA_OF_R[in.r];
-        out.g = GAMMA_OF_G[in.g];
-        out.b = GAMMA_OF_B[in.b];
+    switch(set) {
+        case GAMMA_SET_LED:
+            out.r = GAMMA_LED_R_lut[in.r];
+            out.g = GAMMA_LED_G_lut[in.g];
+            out.b = GAMMA_LED_B_lut[in.b];
+            return out;
+        case GAMMA_SET_OF:
+            out.r = GAMMA_OF_R_lut[in.r];
+            out.g = GAMMA_OF_G_lut[in.g];
+            out.b = GAMMA_OF_B_lut[in.b];
+            return out;
+        default:
+            return GRB_BLACK;
     }
-
-    return out;
 }

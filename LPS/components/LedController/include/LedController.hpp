@@ -1,6 +1,5 @@
 #pragma once
 
-#include "BoardConfig.h"
 #include "pca9955b_hal.h"
 #include "ws2812b_hal.h"
 

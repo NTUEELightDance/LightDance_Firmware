@@ -1,6 +1,5 @@
 #include "readframe.h"
 
-#include "color.h"
 #include "control_reader.h"
 #include "frame_reader.h"
 #include "player_protocal.h"

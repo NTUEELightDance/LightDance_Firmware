@@ -30,10 +30,13 @@ esp_err_t FrameBuffer::init() {
     memset(&buffer, 0, sizeof(buffer));
 
     count = 0;
-    // test_read_frame(current);
-    // test_read_frame(next);
+#if SD_ENABLE
     read_frame(current);
     read_frame(next);
+#else
+    test_read_frame(current);
+    test_read_frame(next);
+#endif
 
     return ESP_OK;
 }
@@ -46,12 +49,15 @@ esp_err_t FrameBuffer::reset() {
     memset(&frame1, 0, sizeof(frame1));
     memset(&buffer, 0, sizeof(buffer));
 
-    count = 0;
-    // test_read_frame(current);
-    // test_read_frame(next);
+#if SD_ENABLE
     frame_reset();
     read_frame(current);
     read_frame(next);
+#else
+    count = 0;
+    test_read_frame(current);
+    test_read_frame(next);
+#endif
 
     return ESP_OK;
 }
@@ -73,8 +79,11 @@ void FrameBuffer::compute(uint64_t time_ms) {
 
     while(time_ms >= next->timestamp) {
         std::swap(current, next);
-        // test_read_frame(next);
+#if SD_ENABLE
         read_frame(next);
+#else
+        test_read_frame(next);
+#endif
         if(next->timestamp <= current->timestamp) {
             ESP_LOGE(TAG, "Non-monotonic timestamp: current=%" PRIu64 ", next=%" PRIu64, current->timestamp, next->timestamp);
             buffer = current->data;
@@ -109,7 +118,7 @@ void FrameBuffer::compute(uint64_t time_ms) {
             len = WS2812B_MAX_PIXEL_NUM;
 
         for(int i = 0; i < len; i++) {
-            buffer.ws2812b[ch][i] = gamma_correct_u8(grb_lerp_hsv_u8(current->data.ws2812b[ch][i], next->data.ws2812b[ch][i], p), 1);
+            buffer.ws2812b[ch][i] = grb_gamma_u8(grb_lerp_hsv_u8(current->data.ws2812b[ch][i], next->data.ws2812b[ch][i], p), GAMMA_SET_LED);
         }
         for(int i = len; i < WS2812B_MAX_PIXEL_NUM; i++) {
             buffer.ws2812b[ch][i] = {0, 0, 0};
@@ -117,7 +126,7 @@ void FrameBuffer::compute(uint64_t time_ms) {
     }
 
     for(int ch = 0; ch < PCA9955B_CH_NUM; ch++) {
-        buffer.pca9955b[ch] = gamma_correct_u8(grb_lerp_hsv_u8(current->data.pca9955b[ch], next->data.pca9955b[ch], p), 0);
+        buffer.pca9955b[ch] = grb_gamma_u8(grb_lerp_hsv_u8(current->data.pca9955b[ch], next->data.pca9955b[ch], p), GAMMA_SET_OF);
     }
 }
 
