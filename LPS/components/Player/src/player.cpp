@@ -42,9 +42,9 @@ esp_err_t Player::pause() {
     return sendEvent(e);
 }
 
-esp_err_t Player::reset() {
+esp_err_t Player::stop() {
     Event e{};
-    e.type = EVENT_RESET;
+    e.type = EVENT_STOP;
     return sendEvent(e);
 }
 

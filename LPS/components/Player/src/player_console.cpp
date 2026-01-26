@@ -31,8 +31,8 @@ static int cmd_pause(int argc, char** argv) {
     return 0;
 }
 
-static int cmd_reset(int argc, char** argv) {
-    Player::getInstance().reset();
+static int cmd_stop(int argc, char** argv) {
+    Player::getInstance().stop();
     return 0;
 }
 
@@ -101,7 +101,7 @@ static void register_cmd(const char* name, const char* help, esp_console_cmd_fun
 static void register_all_commands(void) {
     register_cmd("play", "start playback", &cmd_play);
     register_cmd("pause", "pause playback", &cmd_pause);
-    register_cmd("reset", "reset playback", &cmd_reset);
+    register_cmd("stop", "stop playback", &cmd_stop);
     register_cmd("release", "release player", &cmd_release);
     register_cmd("load", "load frames", &cmd_load);
     register_cmd("test", "test rgb output", &cmd_test);

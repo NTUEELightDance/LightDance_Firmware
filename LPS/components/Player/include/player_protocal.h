@@ -9,7 +9,7 @@ typedef enum {
     EVENT_PLAY,
     EVENT_TEST,
     EVENT_PAUSE,
-    EVENT_RESET,
+    EVENT_STOP,
     EVENT_RELEASE,
     EVENT_LOAD,
     EVENT_EXIT,
