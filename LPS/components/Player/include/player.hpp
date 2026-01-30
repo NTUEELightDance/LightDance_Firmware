@@ -28,7 +28,7 @@ class Player {
 
     esp_err_t play();
     esp_err_t pause();
-    esp_err_t reset();
+    esp_err_t stop();
     esp_err_t release();
     esp_err_t load();
     esp_err_t test(uint8_t, uint8_t, uint8_t);

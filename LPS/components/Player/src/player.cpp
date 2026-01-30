@@ -42,9 +42,9 @@ esp_err_t Player::pause() {
     return sendEvent(e);
 }
 
-esp_err_t Player::reset() {
+esp_err_t Player::stop() {
     Event e{};
-    e.type = EVENT_RESET;
+    e.type = EVENT_STOP;
     return sendEvent(e);
 }
 
@@ -139,9 +139,9 @@ void Player::taskEntry(void* pvParameters) {
 
     // p.switchState(Player::PlayerState::UNLOADED);
 
-    // Event bootEvent;
-    // bootEvent.type = EVENT_LOAD;
-    // p.processEvent(bootEvent); // auto-load on start
+    Event bootEvent;
+    bootEvent.type = EVENT_LOAD;
+    p.processEvent(bootEvent); // auto-load on start
 
     p.Loop();
 }

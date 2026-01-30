@@ -37,14 +37,17 @@ esp_err_t LedController::init() {
 
     // 5. Initialize PCA9955B Chips
     for(int i = 0; i < PCA9955B_NUM; i++) {
-        if(i2c_master_probe(bus_handle, BOARD_HW_CONFIG.i2c_addrs[i], 100) == ESP_OK) {
+    esp_err_t probe_ret = i2c_master_probe(bus_handle, BOARD_HW_CONFIG.i2c_addrs[i], 100);
+        if(probe_ret == ESP_OK) {
             pca_enable[i] = true;
             ESP_GOTO_ON_ERROR(pca9955b_init(&pca9955b_devs[i], BOARD_HW_CONFIG.i2c_addrs[i], bus_handle), err, TAG, "Failed to init PCA9955B[%d]", i);
         } else {
             ESP_LOGE(TAG, "Fail to find device at address 0x%02x", BOARD_HW_CONFIG.i2c_addrs[i]);
+            ret = probe_ret;
+            goto err;
         }
     }
-
+    
     ESP_LOGI(TAG, "LedController initialized successfully");
     return ESP_OK;
 

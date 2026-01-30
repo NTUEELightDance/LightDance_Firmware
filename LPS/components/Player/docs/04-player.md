@@ -64,15 +64,15 @@ stateDiagram
     READY --> TEST: test(r,g,b)
     
     PLAYING --> PAUSED: pause()
-    PLAYING --> READY: reset()
+    PLAYING --> READY: stop()
     PLAYING --> UNLOADED: release()
     
     PAUSED --> PLAYING: play()
-    PAUSED --> READY: reset()
+    PAUSED --> READY: stop()
     PAUSED --> UNLOADED: release()
     
     TEST --> TEST: test(r,g,b)
-    TEST --> READY: reset()
+    TEST --> READY: stop()
     TEST --> UNLOADED: release()
 ```
 
@@ -127,7 +127,7 @@ esp_err_t init();
 esp_err_t load();    // Initialize hardware -> Goto READY
 esp_err_t play();    // Start animation -> Goto PLAYING
 esp_err_t pause();   // Freeze animation -> Goto PAUSED
-esp_err_t reset();   // Stop and rewind to 0 -> Goto READY
+esp_err_t stop();   // Stop and rewind to 0 -> Goto READY
 esp_err_t release(); // Free hardware -> Goto UNLOADED
 ```
 

@@ -19,7 +19,7 @@ static bool opened = false;
 
 static frame_layout_t g_layout;
 static uint32_t g_frame_size = 0;
-static uint16_t g_version = 0;
+//static uint16_t g_version = 0;
 
 /* ================= helpers ================= */
 
@@ -161,7 +161,7 @@ esp_err_t frame_reader_read(table_frame_t *out)
     /* checksum */
     uint32_t chk = p[0] | (p[1]<<8) | (p[2]<<16) | (p[3]<<24);
     if (chk != sum) {
-        ESP_LOGE(TAG, "checksum mismatch %u != %u", sum, chk);
+        ESP_LOGE(TAG, "checksum mismatch %lu!= %lu", sum, chk);
         return ESP_ERR_INVALID_CRC;
     }
 

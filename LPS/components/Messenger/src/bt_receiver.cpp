@@ -255,7 +255,7 @@ static void IRAM_ATTR timer_timeout_cb(void* arg) {
             Player::getInstance().pause();
             break;
         case 0x03:
-            Player::getInstance().reset();
+            Player::getInstance().stop();
             break;
         case 0x04:
             Player::getInstance().release();

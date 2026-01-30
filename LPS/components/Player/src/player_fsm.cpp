@@ -9,8 +9,8 @@ const char* getEventName(int type) {
             return "PLAY";
         case EVENT_PAUSE:
             return "PAUSE";
-        case EVENT_RESET:
-            return "RESET";
+        case EVENT_STOP:
+            return "STOP";
         case EVENT_RELEASE:
             return "RELEASE";
         case EVENT_LOAD:
@@ -116,9 +116,15 @@ void Player::processEvent(Event& e) {
             if(e.type == EVENT_LOAD) {
                 if(acquireResources() == ESP_OK)
                     switchState(PlayerState::READY);
-                else
+                else{
                     ESP_LOGE(TAG, "resource acquire failed");
-            } else
+                    vTaskDelay(pdMS_TO_TICKS(1000)); // avoid busy loop
+                    Event e;
+                    e.type = EVENT_LOAD;
+                    sendEvent(e);
+                }
+            }
+            else
                 ESP_LOGW(TAG, "UnloadedState: ignoring event %s", getEventName(e.type));
             break;
 
@@ -137,7 +143,7 @@ void Player::processEvent(Event& e) {
         case PlayerState::PLAYING:
             if(e.type == EVENT_PAUSE)
                 switchState(PlayerState::PAUSE);
-            else if(e.type == EVENT_RESET)
+            else if(e.type == EVENT_STOP)
                 switchState(PlayerState::READY);
             else if(e.type == EVENT_RELEASE)
                 switchState(PlayerState::UNLOADED);
@@ -148,7 +154,7 @@ void Player::processEvent(Event& e) {
         case PlayerState::PAUSE:
             if(e.type == EVENT_PLAY)
                 switchState(PlayerState::PLAYING);
-            else if(e.type == EVENT_RESET)
+            else if(e.type == EVENT_STOP)
                 switchState(PlayerState::READY);
             else if(e.type == EVENT_RELEASE)
                 switchState(PlayerState::UNLOADED);
@@ -159,7 +165,7 @@ void Player::processEvent(Event& e) {
         case PlayerState::TEST:
             if(e.type == EVENT_TEST) {
                 testPlayback(e.test_data.r, e.test_data.g, e.test_data.b);
-            } else if(e.type == EVENT_RESET)
+            } else if(e.type == EVENT_STOP)
                 switchState(PlayerState::READY);
             else if(e.type == EVENT_RELEASE)
                 switchState(PlayerState::UNLOADED);
