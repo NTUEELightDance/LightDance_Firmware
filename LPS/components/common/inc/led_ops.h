@@ -171,13 +171,19 @@ inline grb8_t grb_gamma_u8(grb8_t in, gamma_set_t set) {
     switch(set) {
         case GAMMA_SET_LED:
             out.r = GAMMA_LED_R_lut[in.r];
+            out.r = mul255_u8(out.r, LED_MAX_BRIGHTNESS);
             out.g = GAMMA_LED_G_lut[in.g];
+            out.g = mul255_u8(out.g, LED_MAX_BRIGHTNESS);
             out.b = GAMMA_LED_B_lut[in.b];
+            out.b = mul255_u8(out.b, LED_MAX_BRIGHTNESS);
             return out;
         case GAMMA_SET_OF:
             out.r = GAMMA_OF_R_lut[in.r];
+            out.r = mul255_u8(out.r, OF_MAX_BRIGHTNESS_R);
             out.g = GAMMA_OF_G_lut[in.g];
+            out.g = mul255_u8(out.g, OF_MAX_BRIGHTNESS_G);
             out.b = GAMMA_OF_B_lut[in.b];
+            out.b = mul255_u8(out.b, OF_MAX_BRIGHTNESS_B);
             return out;
         default:
             return GRB_BLACK;

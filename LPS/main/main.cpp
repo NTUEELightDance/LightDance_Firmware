@@ -9,6 +9,9 @@
 #include "player.hpp"
 #include "readframe.h"
 
+#include "ld_i2c.hpp"
+#include "ld_i2c_device.hpp"
+
 static const char* TAG = "APP";
 
 static void app_task(void* arg) {
@@ -50,4 +53,9 @@ static void app_task(void* arg) {
 extern "C" void app_main(void) {
     xTaskCreate(app_task, "app_task", 16384, NULL, 5, NULL);
     // app_main return 讓 main task 結束，不再承擔後續 stack 壓力
+
+    // ld_i2c_bus_init(I2C_NUM_0, GPIO_NUM_21, GPIO_NUM_22);
+
+    // I2cDevice dev;
+    // dev.init(I2C_NUM_0, 0x1f, 400000);
 }
