@@ -3,6 +3,12 @@
 #define SD_ENABLE 0
 #define BT_ENABLE 0
 
+#define OF_MAX_BRIGHTNESS_R 210
+#define OF_MAX_BRIGHTNESS_G 200
+#define OF_MAX_BRIGHTNESS_B 255
+
+#define LED_MAX_BRIGHTNESS 50
+
 #define I2C_FREQ 400000
 #define I2C_TIMEOUT_MS 2
 
