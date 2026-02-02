@@ -33,6 +33,7 @@ class Player {
     esp_err_t load();
     esp_err_t test(uint8_t, uint8_t, uint8_t);
     esp_err_t exit();
+    uint8_t getState() { return (uint8_t)m_state; }
 
   private:
     // ===== Called by State =====
