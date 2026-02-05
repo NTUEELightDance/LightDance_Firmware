@@ -1,4 +1,4 @@
-#include "board.h"
+#include "ld_board.h"
 
 const hw_config_t BOARD_HW_CONFIG = {
     .ws2812b_0 = GPIO_NUM_32,

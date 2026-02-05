@@ -3,11 +3,11 @@
 extern "C" {
 #endif
 #include <stdint.h>
-#include "board.h"
 #include "channel_info.h"
 #include "esp_err.h"
 #include "frame.h"
 #include "frame_config.h"
+#include "ld_board.h"
 #include "led_types.h"
 #include "player_protocal.h"
 

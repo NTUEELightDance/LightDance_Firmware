@@ -5,6 +5,6 @@ idf_component_register(
 
     PRIV_INCLUDE_DIRS "src"
 
-    REQUIRES driver esp_timer freertos log common
+    REQUIRES driver freertos log 
 )
 

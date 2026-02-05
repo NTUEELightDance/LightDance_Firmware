@@ -2,8 +2,8 @@
 
 #include "driver/i2c_master.h"
 
-#include "board.h"
 #include "config.h"
+#include "ld_board.h"
 
 #ifdef __cplusplus
 extern "C" {

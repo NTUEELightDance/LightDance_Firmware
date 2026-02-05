@@ -4,8 +4,8 @@
 #include "driver/rmt_encoder.h"
 #include "driver/rmt_tx.h"
 
-#include "board.h"
 #include "config.h"
+#include "ld_board.h"
 #include "ws2812b_encoder.h"
 
 #ifdef __cplusplus

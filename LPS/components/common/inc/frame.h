@@ -1,6 +1,6 @@
 #pragma once
 
-#include "board.h"
+#include "ld_board.h"
 #include "led_types.h"
 
 typedef struct {
