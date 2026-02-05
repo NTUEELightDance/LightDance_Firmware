@@ -7,7 +7,7 @@
 #include "driver/gpio.h"
 #include "esp_err.h"
 
-#include "encoder/ws2812b_encoder.h"
+#include "encoder/ld_ws2812b_encoder.h"
 
 #ifdef __cplusplus
 extern "C" {
