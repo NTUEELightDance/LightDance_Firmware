@@ -1,7 +1,7 @@
 #pragma once
 
 #define SD_ENABLE 1
-#define BT_ENABLE 0
+#define BT_ENABLE 1
 
 #define OF_MAX_BRIGHTNESS_R 210
 #define OF_MAX_BRIGHTNESS_G 200
@@ -14,4 +14,4 @@
 
 #define RMT_TIMEOUT_MS 10
 
-#define LD_IGNORE_DRIVER_INIT_FAIL 0
+#define LD_IGNORE_DRIVER_INIT_FAIL 1
