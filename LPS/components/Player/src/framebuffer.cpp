@@ -4,6 +4,7 @@
 #include "algorithm"
 #include "esp_log.h"
 #include "readframe.h"
+#include "esp_check.h"
 
 static const char* TAG = "fb";
 
@@ -31,8 +32,8 @@ esp_err_t FrameBuffer::init() {
 
     count = 0;
 #if SD_ENABLE
-    read_frame(current);
-    read_frame(next);
+    ESP_RETURN_ON_ERROR(read_frame(current), TAG, "Failed to read current frame");
+    ESP_RETURN_ON_ERROR(read_frame(next),    TAG, "Failed to read next frame");
 #else
     test_read_frame(current);
     test_read_frame(next);
@@ -51,8 +52,8 @@ esp_err_t FrameBuffer::reset() {
 
 #if SD_ENABLE
     frame_reset();
-    read_frame(current);
-    read_frame(next);
+    ESP_RETURN_ON_ERROR(read_frame(current), TAG, "Failed to read current frame");
+    ESP_RETURN_ON_ERROR(read_frame(next),    TAG, "Failed to read next frame");
 #else
     count = 0;
     test_read_frame(current);
@@ -63,6 +64,13 @@ esp_err_t FrameBuffer::reset() {
 }
 
 esp_err_t FrameBuffer::deinit() {
+    current = nullptr;
+    next = nullptr;
+    
+    memset(&frame0, 0, sizeof(frame0));
+    memset(&frame1, 0, sizeof(frame1));
+    memset(&buffer, 0, sizeof(buffer));
+
     return ESP_OK;
 }
 

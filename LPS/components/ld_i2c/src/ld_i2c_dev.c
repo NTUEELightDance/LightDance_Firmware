@@ -1,6 +1,7 @@
 #include "ld_i2c_dev.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "esp_check.h"
 #include "esp_log.h"

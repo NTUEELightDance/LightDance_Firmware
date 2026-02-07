@@ -189,9 +189,7 @@ esp_err_t LedController::deinit() {
 
     // 1. Free WS2812B Devices
     for(int i = 0; i < WS2812B_NUM; i++) {
-        if(ws2812b_del(&(ws2812b_devs[i])) != ESP_OK) {
-            ESP_LOGW(TAG, "Error deleting WS2812B[%d]", i);
-        }
+        ESP_RETURN_ON_ERROR(ws2812b_del(&ws2812b_devs[i]), TAG, "Failed to delete WS2812B[%d]", i);
     }
 
     // 2. Free PCA9955B Devices
@@ -199,9 +197,7 @@ esp_err_t LedController::deinit() {
         if(!pca_enable[i]) {
             continue;
         }
-        if(pca9955b_del(&(pca9955b_devs[i])) != ESP_OK) {
-            ESP_LOGW(TAG, "Error deleting PCA9955B[%d]", i);
-        }
+        ESP_RETURN_ON_ERROR(pca9955b_del(&pca9955b_devs[i]), TAG, "Failed to delete PCA9955B[%d]", i);
     }
 
     // 3. Free I2C Bus

@@ -95,9 +95,9 @@ esp_err_t Player::pausePlayback() {
 }
 
 esp_err_t Player::resetPlayback() {
-    clock.pause();
-    clock.reset();
-    fb.reset();
+    ESP_RETURN_ON_ERROR(clock.pause(), TAG, "Failed to pause clock");
+    ESP_RETURN_ON_ERROR(clock.reset(), TAG, "Failed to reset clock");
+    ESP_RETURN_ON_ERROR(fb.reset(), TAG, "Failed to reset framebuffer");
 
     controller.fill(0, 0, 0);
     controller.show();
@@ -131,7 +131,7 @@ esp_err_t Player::testPlayback() {
         controller.fill(m_test_color.r, m_test_color.g, m_test_color.b);
         controller.show();
     }
-    if(m_test_color.mode == TestMode::BREATH_RGB) {
+    else if(m_test_color.mode == TestMode::BREATH_RGB) {
         clock.start();
     }
 
@@ -141,8 +141,9 @@ esp_err_t Player::testPlayback() {
 /* ================= RTOS ================= */
 
 esp_err_t Player::createTask() {
-    BaseType_t res = xTaskCreatePinnedToCore(Player::taskEntry, "PlayerTask", 8192, NULL, 5, &taskHandle, 1);
     eventQueue = xQueueCreate(50, sizeof(Event));
+    BaseType_t res = xTaskCreatePinnedToCore(Player::taskEntry, "PlayerTask", 8192, NULL, 5, &taskHandle, 1);
+    
     ESP_RETURN_ON_FALSE(res == pdPASS, ESP_FAIL, TAG, "create task failed");
     taskAlive = true;
     return ESP_OK;
@@ -214,9 +215,8 @@ esp_err_t Player::acquireResources() {
         ch_info.i2c_leds[i] = 1;
     }
 
-    ESP_RETURN_ON_FALSE(eventQueue != nullptr, ESP_ERR_NO_MEM, TAG, "queue alloc failed");
-    controller.init();
-    // ESP_RETURN_ON_ERROR(controller.init(), TAG, "controller init failed");
+    ESP_RETURN_ON_FALSE(eventQueue != nullptr, ESP_ERR_NO_MEM, TAG, "eventQueue is NULL");
+    ESP_RETURN_ON_ERROR(controller.init(), TAG, "controller init failed");
     ESP_RETURN_ON_ERROR(fb.init(), TAG, "framebuffer init failed");
     ESP_RETURN_ON_ERROR(clock.init(true, taskHandle, 1000000 / 40), TAG, "clock init failed");
 
@@ -229,9 +229,9 @@ esp_err_t Player::releaseResources() {
         return ESP_OK;
     }
 
-    clock.deinit();
-    fb.deinit();
-    controller.deinit();
+    ESP_RETURN_ON_ERROR(clock.deinit(), TAG, "clock deinit failed");
+    ESP_RETURN_ON_ERROR(fb.deinit(), TAG, "framebuffer deinit failed");
+    ESP_RETURN_ON_ERROR(controller.deinit(), TAG, "controller deinit failed");
 
     resources_acquired = false;
     return ESP_OK;

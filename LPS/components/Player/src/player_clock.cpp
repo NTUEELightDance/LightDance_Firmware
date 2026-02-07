@@ -85,8 +85,16 @@ esp_err_t PlayerMetronome::deinit() {
     stop();
 
     if(timer) {
-        gptimer_disable(timer);
-        gptimer_del_timer(timer);
+        esp_err_t ret = gptimer_disable(timer);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "gptimer_disable failed: %s", esp_err_to_name(ret));
+            return ret; 
+        }
+        ret = gptimer_del_timer(timer);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "gptimer_del_timer failed: %s", esp_err_to_name(ret));
+            return ret;
+        }
         timer = nullptr;
     }
 
@@ -208,7 +216,11 @@ esp_err_t PlayerClock::deinit() {
     }
 
     if(with_metronome) {
-        metronome.deinit();
+        esp_err_t ret = metronome.deinit();
+        if(ret != ESP_OK) {
+            ESP_LOGE(TAG, "metronome deinit failed: %s", esp_err_to_name(ret));
+            return ret;
+        }
     }
     accumulated_us = 0;
     last_start_us = 0;

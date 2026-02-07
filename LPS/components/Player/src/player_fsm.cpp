@@ -65,12 +65,17 @@ void Player::switchState(PlayerState newState) {
 #endif
             if(releaseResources() == ESP_OK) {
                 ESP_LOGI(TAG, "resources released");
+                vTaskDelay(pdMS_TO_TICKS(100));
+                Event e;
+                e.type = EVENT_LOAD;
+                sendEvent(e);
             } else {
-                ESP_LOGE(TAG, "resources release failed");
+                ESP_LOGE(TAG, "resources release failed, retry in 1 sec");
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                Event e;
+                e.type = EVENT_RELEASE;
+                sendEvent(e);
             }
-            Event e;
-            e.type = EVENT_LOAD;
-            sendEvent(e);
         } break;
 
         case PlayerState::READY: {
@@ -122,12 +127,15 @@ void Player::processEvent(Event& e) {
                 if(acquireResources() == ESP_OK)
                     switchState(PlayerState::READY);
                 else {
-                    ESP_LOGE(TAG, "resource acquire failed");
+                    ESP_LOGE(TAG, "resource acquire failed, retry in 1 sec");
                     vTaskDelay(pdMS_TO_TICKS(1000));
                     Event e;
                     e.type = EVENT_LOAD;
                     sendEvent(e);
                 }
+            } 
+            else if(e.type == EVENT_RELEASE) {
+                switchState(PlayerState::UNLOADED);
             } else
                 ESP_LOGW(TAG, "UnloadedState: ignoring event %s", getEventName(e.type));
             break;
