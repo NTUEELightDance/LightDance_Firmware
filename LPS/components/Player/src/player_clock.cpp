@@ -274,6 +274,17 @@ esp_err_t PlayerClock::reset() {
     return ESP_OK;
 }
 
+esp_err_t PlayerClock::set_time_us(int64_t target_us) {
+    ESP_RETURN_ON_FALSE(state != ClockState::UNINIT, ESP_ERR_INVALID_STATE, TAG, "set time before init");
+
+    ESP_RETURN_ON_FALSE(state == ClockState::PAUSED || state == ClockState::STOPPED, ESP_ERR_INVALID_STATE, TAG, "please stop/pause the clock first");
+
+    accumulated_us = target_us;
+    last_start_us = esp_timer_get_time();
+
+    return ESP_OK;
+}
+
 int64_t PlayerClock::now_us() const {
     if(state == ClockState::UNINIT) {
         return 0;

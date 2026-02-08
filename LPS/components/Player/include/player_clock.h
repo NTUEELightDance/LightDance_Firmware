@@ -57,6 +57,8 @@ class PlayerClock {
     esp_err_t pause();
     esp_err_t reset();
 
+    esp_err_t set_time_us(int64_t target_us);
+
     int64_t now_us() const;
 
   private:
