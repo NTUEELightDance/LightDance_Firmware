@@ -123,6 +123,15 @@ esp_err_t LedController::show() {
         }
     }
 
+    // 3. Wait for WS2812B transmission to complete
+    for(int i = 0; i < WS2812B_NUM / 2; i++) {
+        err = ws2812b_wait_done(&ws2812b_devs[i]);
+        if(err != ESP_OK) {
+            ESP_LOGE(TAG, "Wait done failed for WS2812B[%d]: %s", i, esp_err_to_name(err));
+            ret = err;
+        }
+    }
+
     // 2. Trigger PCA9955B transmission (Synchronous/Blocking)
     for(int i = 0; i < PCA9955B_NUM / 2; i++) {
         if(!pca_enable[i]) {
@@ -131,15 +140,6 @@ esp_err_t LedController::show() {
         err = pca9955b_show(&pca9955b_devs[i]);
         if(err != ESP_OK) {
             ESP_LOGE(TAG, "Failed to show PCA9955B[%d]: %s", i, esp_err_to_name(err));
-            ret = err;
-        }
-    }
-
-    // 3. Wait for WS2812B transmission to complete
-    for(int i = 0; i < WS2812B_NUM / 2; i++) {
-        err = ws2812b_wait_done(&ws2812b_devs[i]);
-        if(err != ESP_OK) {
-            ESP_LOGE(TAG, "Wait done failed for WS2812B[%d]: %s", i, esp_err_to_name(err));
             ret = err;
         }
     }
@@ -154,6 +154,15 @@ esp_err_t LedController::show() {
         }
     }
 
+    // 3. Wait for WS2812B transmission to complete
+    for(int i = WS2812B_NUM / 2; i < WS2812B_NUM; i++) {
+        err = ws2812b_wait_done(&ws2812b_devs[i]);
+        if(err != ESP_OK) {
+            ESP_LOGE(TAG, "Wait done failed for WS2812B[%d]: %s", i, esp_err_to_name(err));
+            ret = err;
+        }
+    }
+
     // 2. Trigger PCA9955B transmission (Synchronous/Blocking)
     for(int i = PCA9955B_NUM / 2; i < PCA9955B_NUM; i++) {
         if(!pca_enable[i]) {
@@ -162,15 +171,6 @@ esp_err_t LedController::show() {
         err = pca9955b_show(&pca9955b_devs[i]);
         if(err != ESP_OK) {
             ESP_LOGE(TAG, "Failed to show PCA9955B[%d]: %s", i, esp_err_to_name(err));
-            ret = err;
-        }
-    }
-
-    // 3. Wait for WS2812B transmission to complete
-    for(int i = WS2812B_NUM / 2; i < WS2812B_NUM; i++) {
-        err = ws2812b_wait_done(&ws2812b_devs[i]);
-        if(err != ESP_OK) {
-            ESP_LOGE(TAG, "Wait done failed for WS2812B[%d]: %s", i, esp_err_to_name(err));
             ret = err;
         }
     }
