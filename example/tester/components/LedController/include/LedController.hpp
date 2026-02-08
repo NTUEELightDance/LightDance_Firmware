@@ -1,8 +1,7 @@
 #pragma once
 
-#include "BoardConfig.h"
-#include "pca9955b_hal.h"
-#include "ws2812b_hal.h"
+#include "pca9955b.h"
+#include "ws2812b.h"
 
 #define SHOW_TIME_PER_FRAME 0
 

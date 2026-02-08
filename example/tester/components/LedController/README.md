@@ -50,7 +50,7 @@ Open `BoardConfig.h` to define your hardware setup:
 Include the main header in your C++ application (`main.cpp`):
 
 ```cpp
-#include "LedController_v2.hpp"
+#include "LedController.hpp"
 #include "BoardConfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"

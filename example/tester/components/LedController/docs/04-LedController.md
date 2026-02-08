@@ -72,7 +72,7 @@ esp_err_t black_out();
 ## 4. Usage Example
 
 ```cpp
-#include "LedController_v2.hpp"
+#include "LedController.hpp"
 #include "BoardConfig.h" // Required to access ch_info
 
 void app_main(void) {

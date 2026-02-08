@@ -1,4 +1,4 @@
-#include "ws2812b_hal.h"
+#include "ws2812b.h"
 
 #include "string.h"
 
@@ -43,8 +43,7 @@ esp_err_t ws2812b_init(ws2812b_dev_t* ws2812b, gpio_num_t gpio_num, uint16_t pix
 
     // 1. Validation
     ESP_GOTO_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, err, TAG, "dev is NULL");
-    ESP_GOTO_ON_FALSE(
-        pixel_num > 0 && pixel_num <= WS2812B_MAX_PIXEL_NUM, ESP_ERR_INVALID_ARG, err, TAG, "pixel_num out of range (max=%d)", WS2812B_MAX_PIXEL_NUM);
+    ESP_GOTO_ON_FALSE(pixel_num > 0 && pixel_num <= WS2812B_MAX_PIXEL_NUM, ESP_ERR_INVALID_ARG, err, TAG, "pixel_num out of range (max=%d)", WS2812B_MAX_PIXEL_NUM);
 
     // 2. Clear device (important!)
     memset(ws2812b, 0, sizeof(ws2812b_dev_t));
@@ -62,8 +61,7 @@ esp_err_t ws2812b_init(ws2812b_dev_t* ws2812b, gpio_num_t gpio_num, uint16_t pix
     ESP_GOTO_ON_ERROR(rmt_enable(ws2812b->rmt_channel), err, TAG, "RMT enable failed");
 
     // 6. Clear LEDs (buffer is already zeroed)
-    ESP_GOTO_ON_ERROR(
-        rmt_transmit(ws2812b->rmt_channel, ws2812b->rmt_encoder, ws2812b->buffer, pixel_num * 3, &rmt_tx_config), err, TAG, "Failed to clear LEDs");
+    ESP_GOTO_ON_ERROR(rmt_transmit(ws2812b->rmt_channel, ws2812b->rmt_encoder, ws2812b->buffer, pixel_num * 3, &rmt_tx_config), err, TAG, "Failed to clear LEDs");
 
     rmt_tx_wait_all_done(ws2812b->rmt_channel, RMT_TIMEOUT_MS);
 
@@ -120,8 +118,7 @@ esp_err_t ws2812b_show(ws2812b_dev_t* ws2812b) {
     // 3. Transmit
     size_t payload_size = ws2812b->pixel_num * 3;
 
-    ESP_RETURN_ON_ERROR(
-        rmt_transmit(ws2812b->rmt_channel, ws2812b->rmt_encoder, ws2812b->buffer, payload_size, &rmt_tx_config), TAG, "Failed to transmit");
+    ESP_RETURN_ON_ERROR(rmt_transmit(ws2812b->rmt_channel, ws2812b->rmt_encoder, ws2812b->buffer, payload_size, &rmt_tx_config), TAG, "Failed to transmit");
 
     return ESP_OK;
 }

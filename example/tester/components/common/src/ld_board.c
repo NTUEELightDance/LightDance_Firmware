@@ -1,4 +1,4 @@
-#include "BoardConfig.h"
+#include "ld_board.h"
 
 const hw_config_t BOARD_HW_CONFIG = {
     .ws2812b_0 = GPIO_NUM_32,
@@ -16,8 +16,8 @@ const hw_config_t BOARD_HW_CONFIG = {
     .pca9955b_3 = 0x23,
     .pca9955b_4 = 0x5b,
     .pca9955b_5 = 0x5c,
-    .pca9955b_6 = 0x1f,
-    .pca9955b_7 = 0x20,
+    .pca9955b_6 = 0x5e,
+    .pca9955b_7 = 0x5f,
 };
 
 ch_info_t ch_info;
