@@ -41,7 +41,9 @@ esp_err_t LedController::init() {
     // 5. Initialize PCA9955B Chips
     for(int i = 0; i < PCA9955B_NUM; i++) {
 #if LD_IGNORE_DRIVER_INIT_FAIL
-        pca9955b_init(&pca9955b_devs[i], BOARD_HW_CONFIG.i2c_addrs[i], bus_handle);
+        if(pca9955b_init(&pca9955b_devs[i], BOARD_HW_CONFIG.i2c_addrs[i], bus_handle) == ESP_OK) {
+            pca_enable[i] = true;
+        };
 #else
         esp_err_t probe_ret = i2c_master_probe(bus_handle, BOARD_HW_CONFIG.i2c_addrs[i], 100);
         if(probe_ret == ESP_OK) {

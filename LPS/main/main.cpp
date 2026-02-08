@@ -26,7 +26,7 @@ static void app_task(void* arg) {
     }
 #endif
 
-    cal_gamma_lut();
+    calc_gamma_lut();
     Player::getInstance().init();
 
 #if BT_ENABLE

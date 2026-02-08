@@ -1,7 +1,7 @@
 #pragma once
 
-#define SD_ENABLE 0
-#define BT_ENABLE 0
+#define SD_ENABLE 1
+#define BT_ENABLE 1
 
 #define OF_MAX_BRIGHTNESS_R 210
 #define OF_MAX_BRIGHTNESS_G 200
