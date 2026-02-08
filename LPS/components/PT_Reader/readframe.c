@@ -45,6 +45,8 @@ static sd_cmd_t cmd = CMD_NONE;
 #include "esp_vfs_fat.h"
 #include "sdmmc_cmd.h"
 
+static sdmmc_card_t* g_sd_card = NULL;
+
 static esp_err_t mount_sdcard(void)
 {
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
@@ -65,12 +67,11 @@ static esp_err_t mount_sdcard(void)
     slot_config.gpio_wp = GPIO_NUM_NC;
     slot_config.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
 
-    sdmmc_card_t* card = NULL;
     esp_err_t ret = esp_vfs_fat_sdmmc_mount("/sd",
                                            &host,
                                            &slot_config,
                                            &mount_config,
-                                           &card);
+                                           &g_sd_card);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "SD mount failed (%s)", esp_err_to_name(ret));
         return ret;
@@ -124,6 +125,8 @@ static void sd_reader_task(void* arg)
 }
 
 /* ================= public API ================= */
+
+/* ---- initial frame system ---- */
 
 esp_err_t frame_system_init(const char *control_path,
                             const char *frame_path)
@@ -221,6 +224,8 @@ esp_err_t frame_reset(void)
     return ESP_OK;
 }
 
+/* ---- deinit frame system ---- */
+
 void frame_system_deinit(void)
 {
     if (!inited)
@@ -245,4 +250,20 @@ void frame_system_deinit(void)
     inited   = false;
 
     ESP_LOGI(TAG, "frame system deinit");
+}
+
+/* ---- get sd card id ---- */
+
+const char* get_sd_card_id(void) {
+    if (g_sd_card == NULL) {
+        return "0"; // no card
+    }
+    static char card_id[33];  // 32 chars + null terminator
+    
+    snprintf(card_id, sizeof(card_id), "%02X%04X%08X",
+             g_sd_card->cid.mfg_id,
+             g_sd_card->cid.oem_id,
+             g_sd_card->cid.serial);
+    
+    return card_id;
 }
