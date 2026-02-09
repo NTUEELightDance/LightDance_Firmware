@@ -45,8 +45,6 @@ esp_err_t frame_reader_init(const char* path);
  */
 void frame_reader_deinit(void);
 
-esp_err_t frame_reader_reset(void);
-
 /**
  * @brief  回傳目前 frame 的 byte size
  *
@@ -67,6 +65,8 @@ uint32_t frame_reader_frame_size(void);
  *   - ESP_ERR_INVALID_CRC   checksum mismatch（檔案指標已回復）
  */
 esp_err_t frame_reader_read(table_frame_t* out);
+
+esp_err_t frame_reader_reset(void);
 
 #ifdef __cplusplus
 }
