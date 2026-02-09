@@ -92,10 +92,8 @@ static void sd_reader_task(void* arg)
 
         /* ---- command handling ---- */
         if (cmd == CMD_RESET) {
-            frame_reader_reset();
+            frame_reader_reset(); //correction
             
-            // 清空當前的 frame_buf
-            //memset(&frame_buf, 0, sizeof(frame_buf));
             cmd = CMD_NONE;
             xSemaphoreGive(sem_free);
             continue;
