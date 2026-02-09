@@ -66,6 +66,13 @@ static int cmd_test(int argc, char** argv) {
     int g = atoi(argv[2]);
     int b = atoi(argv[3]);
 
+    grb8_t color = grb8(r, g, b);
+    ESP_LOGI("fb", "Original LED: R: %u, G: %u, B: %u", color.r, color.g, color.b);
+    color = grb_gamma_u8(color, LED_WS2812B);
+    ESP_LOGI("fb", "After gamma LED: R: %u, G: %u, B: %u", color.r, color.g, color.b);
+    color = grb_set_brightness(color, LED_WS2812B);
+    ESP_LOGI("fb", "After brightness LED: R: %u, G: %u, B: %u", color.r, color.g, color.b);
+
     if(r < 0) {
         r = 0;
     } else if(r > 255) {

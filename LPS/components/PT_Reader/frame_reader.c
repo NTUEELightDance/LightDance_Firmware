@@ -10,15 +10,9 @@
 
 /* ================= config ================= */
 
-<<<<<<< HEAD
 #define FRAME_FILE_HEADER_SIZE 2  // uint16 version
 #define FRAME_RAW_MAX_SIZE 8192
 #define CHECKSUM_SIZE 4  // uint8 (reserved)
-=======
-#define FRAME_FILE_HEADER_SIZE  2   // uint16 version
-#define FRAME_RAW_MAX_SIZE     8192
-#define CHECKSUM_SIZE          4   // uint8 (reserved)
->>>>>>> origin/Shuo_pt
 
 /* ================= static ================= */
 
