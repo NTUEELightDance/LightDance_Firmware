@@ -18,8 +18,8 @@ This structure holds the raw color data for the entire system (all strips and ch
 
 ```cpp
 typedef struct {
-    grb8_t ws2812b[WS2812B_NUM][WS2812B_MAX_PIXEL_NUM]; // RMT Data
-    grb8_t pca9955b[PCA9955B_CH_NUM];                   // I2C Data
+    grb8_t ws2812b[LD_BOARD_WS2812B_NUM][LD_BOARD_WS2812B_MAX_PIXEL_NUM]; // RMT Data
+    grb8_t pca9955b[LD_BOARD_PCA9955B_CH_NUM];                   // I2C Data
 } frame_data;
 ```
 
@@ -116,7 +116,7 @@ void player_task(void *pvParameters) {
         frame_data* pixels = frameBuf.get_buffer();
         
         // Push WS2812B data
-        for(int i=0; i<WS2812B_NUM; i++) {
+        for(int i=0; i<LD_BOARD_WS2812B_NUM; i++) {
              ledCtrl.write_buffer(i, (uint8_t*)pixels->ws2812b[i]);
         }
         

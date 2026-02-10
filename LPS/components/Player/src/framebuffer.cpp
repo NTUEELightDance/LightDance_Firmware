@@ -39,7 +39,7 @@ esp_err_t FrameBuffer::init() {
     memset(&buffer, 0, sizeof(buffer));
 
     count = 0;
-#if SD_ENABLE
+#if LD_CFG_ENABLE_SD
     read_frame(current);
     // print_table_frame(*current);
 
@@ -64,7 +64,7 @@ esp_err_t FrameBuffer::reset() {
     memset(&frame1, 0, sizeof(frame1));
     memset(&buffer, 0, sizeof(buffer));
 
-#if SD_ENABLE
+#if LD_CFG_ENABLE_SD
     frame_reset();
 
     read_frame(current);
@@ -137,13 +137,13 @@ void FrameBuffer::compute(uint64_t time_ms) {
 }
 
 void FrameBuffer::fill(grb8_t color) {
-    for(int ch = 0; ch < WS2812B_NUM; ch++) {
-        for(int i = 0; i < WS2812B_MAX_PIXEL_NUM; i++) {
+    for(int ch = 0; ch < LD_BOARD_WS2812B_NUM; ch++) {
+        for(int i = 0; i < LD_BOARD_WS2812B_MAX_PIXEL_NUM; i++) {
             buffer.ws2812b[ch][i] = color;
         }
     }
 
-    for(int ch = 0; ch < PCA9955B_CH_NUM; ch++) {
+    for(int ch = 0; ch < LD_BOARD_PCA9955B_CH_NUM; ch++) {
         buffer.pca9955b[ch] = color;
     }
 
@@ -164,7 +164,7 @@ bool FrameBuffer::handle_frames(uint64_t time_ms) {
     while(time_ms >= next->timestamp) {
         std::swap(current, next);
 
-#if SD_ENABLE
+#if LD_CFG_ENABLE_SD
         read_frame(next);
         // print_table_frame(*next);
 #else
@@ -182,37 +182,37 @@ bool FrameBuffer::handle_frames(uint64_t time_ms) {
 }
 
 void FrameBuffer::lerp(uint8_t p) {
-    for(int ch = 0; ch < WS2812B_NUM; ch++) {
-        for(int i = 0; i < WS2812B_MAX_PIXEL_NUM; i++) {
+    for(int ch = 0; ch < LD_BOARD_WS2812B_NUM; ch++) {
+        for(int i = 0; i < LD_BOARD_WS2812B_MAX_PIXEL_NUM; i++) {
             buffer.ws2812b[ch][i] = grb_lerp_hsv_u8(current->data.ws2812b[ch][i], next->data.ws2812b[ch][i], p);
         }
     }
 
-    for(int ch = 0; ch < PCA9955B_CH_NUM; ch++) {
+    for(int ch = 0; ch < LD_BOARD_PCA9955B_CH_NUM; ch++) {
         buffer.pca9955b[ch] = grb_lerp_hsv_u8(current->data.pca9955b[ch], next->data.pca9955b[ch], p);
     }
 }
 
 void FrameBuffer::gamma_correction() {
-    for(int ch = 0; ch < WS2812B_NUM; ch++) {
-        for(int i = 0; i < WS2812B_MAX_PIXEL_NUM; i++) {
+    for(int ch = 0; ch < LD_BOARD_WS2812B_NUM; ch++) {
+        for(int i = 0; i < LD_BOARD_WS2812B_MAX_PIXEL_NUM; i++) {
             buffer.ws2812b[ch][i] = grb_gamma_u8(buffer.ws2812b[ch][i], LED_WS2812B);
         }
     }
 
-    for(int ch = 0; ch < PCA9955B_CH_NUM; ch++) {
+    for(int ch = 0; ch < LD_BOARD_PCA9955B_CH_NUM; ch++) {
         buffer.pca9955b[ch] = grb_gamma_u8(buffer.pca9955b[ch], LED_PCA9955B);
     }
 }
 
 void FrameBuffer::brightness_correction() {
-    for(int ch = 0; ch < WS2812B_NUM; ch++) {
-        for(int i = 0; i < WS2812B_MAX_PIXEL_NUM; i++) {
+    for(int ch = 0; ch < LD_BOARD_WS2812B_NUM; ch++) {
+        for(int i = 0; i < LD_BOARD_WS2812B_MAX_PIXEL_NUM; i++) {
             buffer.ws2812b[ch][i] = grb_set_brightness(buffer.ws2812b[ch][i], LED_WS2812B);
         }
     }
 
-    for(int ch = 0; ch < PCA9955B_CH_NUM; ch++) {
+    for(int ch = 0; ch < LD_BOARD_PCA9955B_CH_NUM; ch++) {
         buffer.pca9955b[ch] = grb_set_brightness(buffer.pca9955b[ch], LED_PCA9955B);
     }
 }
@@ -231,13 +231,13 @@ void print_table_frame(const table_frame_t& frame) {
 
 void print_frame_data(const frame_data& data) {
     ESP_LOGI(TAG, "[WS2812]");
-    for(int ch = 0; ch < WS2812B_NUM; ch++) {
+    for(int ch = 0; ch < LD_BOARD_WS2812B_NUM; ch++) {
         int len = ch_info.rmt_strips[ch];
 
         if(len < 0)
             len = 0;
-        if(len > WS2812B_MAX_PIXEL_NUM)
-            len = WS2812B_MAX_PIXEL_NUM;
+        if(len > LD_BOARD_WS2812B_MAX_PIXEL_NUM)
+            len = LD_BOARD_WS2812B_MAX_PIXEL_NUM;
 
         int dump = (len > 5) ? 5 : len;
 
@@ -252,7 +252,7 @@ void print_frame_data(const frame_data& data) {
     }
 
     ESP_LOGI(TAG, "[PCA9955]");
-    for(int i = 0; i < PCA9955B_CH_NUM; i++) {
+    for(int i = 0; i < LD_BOARD_PCA9955B_CH_NUM; i++) {
         const grb8_t& p = data.pca9955b[i];
         ESP_LOGI(TAG, "  CH %2d: G=%u R=%u B=%u", i, p.g, p.r, p.b);
     }
@@ -272,12 +272,12 @@ static grb8_t color_pool[3] = {red, green, blue};
 void test_read_frame(table_frame_t* p) {
     p->timestamp = count * 2000;
     p->fade = true;
-    for(int ch_idx = 0; ch_idx < WS2812B_NUM; ch_idx++) {
+    for(int ch_idx = 0; ch_idx < LD_BOARD_WS2812B_NUM; ch_idx++) {
         for(int i = 0; i < ch_info.rmt_strips[ch_idx]; i++) {
             p->data.ws2812b[ch_idx][i] = grb_lerp_hsv_u8(color_pool[count % 3], color_pool[(count + 1) % 3], i * 255 / ch_info.rmt_strips[ch_idx]);
         }
     }
-    for(int ch_idx = 0; ch_idx < PCA9955B_CH_NUM; ch_idx++) {
+    for(int ch_idx = 0; ch_idx < LD_BOARD_PCA9955B_CH_NUM; ch_idx++) {
         if(ch_info.i2c_leds[ch_idx]) {
             p->data.pca9955b[ch_idx] = color_pool[count % 3];
         }

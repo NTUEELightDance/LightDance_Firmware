@@ -42,8 +42,8 @@ graph TD
 
 ### 1. Configuration
 Open `BoardConfig.h` to define your hardware setup:
-* Set `WS2812B_NUM` for the number of strips.
-* Set `PCA9955B_NUM` for the number of driver ICs.
+* Set `LD_BOARD_WS2812B_NUM` for the number of strips.
+* Set `LD_BOARD_PCA9955B_NUM` for the number of driver ICs.
 * Update `BOARD_HW_CONFIG` with your specific GPIO pins.
 
 ### 2. Integration Example

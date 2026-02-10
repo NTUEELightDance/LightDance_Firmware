@@ -72,8 +72,8 @@ Gamma and brightness behavior is selected by `led_type_t`.
   - 8 PCA9955B I2C addresses
   - 8 WS2812B GPIO output pins
 - `ch_info` is a mutable global containing pixel counts:
-  - `rmt_strips[WS2812B_NUM]`
-  - `i2c_leds[PCA9955B_CH_NUM]`
+  - `rmt_strips[LD_BOARD_WS2812B_NUM]`
+  - `i2c_leds[LD_BOARD_PCA9955B_CH_NUM]`
 
 ## Public API
 
@@ -82,11 +82,11 @@ All headers under `components/ld_core/inc` are treated as public.
 ### `ld_config.h`
 
 Global compile-time flags and limits, including:
-- `SD_ENABLE`, `BT_ENABLE`, `LOGGER_ENABLE`
-- `OF_MAX_BRIGHTNESS_R/G/B`
-- `LED_MAX_BRIGHTNESS`
-- `I2C_FREQ`, `I2C_TIMEOUT_MS`, `RMT_TIMEOUT_MS`
-- `LD_IGNORE_DRIVER_INIT_FAIL`, `LD_ENABLE_INTERNAL_PULLUP`
+- `LD_CFG_ENABLE_SD`, `LD_CFG_ENABLE_BT`, `LD_CFG_ENABLE_LOGGER`
+- `LD_CFG_PCA9955B_MAX_BRIGHTNESS_R/G/B`
+- `LD_CFG_WS2812B_MAX_BRIGHTNESS`
+- `LD_CFG_I2C_FREQ_HZ`, `LD_CFG_I2C_TIMEOUT_MS`, `LD_CFG_RMT_TIMEOUT_MS`
+- `LD_CFG_IGNORE_DRIVER_INIT_FAIL`, `LD_CFG_ENABLE_INTERNAL_PULLUP`
 
 ### `ld_gamma_lut.h`
 
@@ -120,7 +120,7 @@ Implementation notes:
 ### `ld_board.h`
 
 Defines:
-- Topology constants (`WS2812B_NUM`, `WS2812B_MAX_PIXEL_NUM`, `PCA9955B_*`)
+- Topology constants (`LD_BOARD_WS2812B_NUM`, `LD_BOARD_WS2812B_MAX_PIXEL_NUM`, `LD_BOARD_PCA9955B_*`)
 - `hw_config_t`
 - `ch_info_t`
 - Globals:
@@ -154,10 +154,10 @@ If `ch_info` is empty or invalid, downstream modules may fail initialization or 
 void app_led_prepare(void) {
     calc_gamma_lut();
 
-    for(int i = 0; i < WS2812B_NUM; ++i) {
-        ch_info.rmt_strips[i] = WS2812B_MAX_PIXEL_NUM;
+    for(int i = 0; i < LD_BOARD_WS2812B_NUM; ++i) {
+        ch_info.rmt_strips[i] = LD_BOARD_WS2812B_MAX_PIXEL_NUM;
     }
-    for(int i = 0; i < PCA9955B_CH_NUM; ++i) {
+    for(int i = 0; i < LD_BOARD_PCA9955B_CH_NUM; ++i) {
         ch_info.i2c_leds[i] = 1;
     }
 

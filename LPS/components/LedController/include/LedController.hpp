@@ -22,6 +22,6 @@ class LedController {
 
   private:
     i2c_master_bus_handle_t bus_handle;
-    ws2812b_dev_t ws2812b_devs[WS2812B_NUM];
-    pca9955b_dev_t pca9955b_devs[PCA9955B_NUM];
+    ws2812b_dev_t ws2812b_devs[LD_BOARD_WS2812B_NUM];
+    pca9955b_dev_t pca9955b_devs[LD_BOARD_PCA9955B_NUM];
 };

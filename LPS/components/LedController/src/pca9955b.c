@@ -31,7 +31,7 @@ esp_err_t i2c_bus_init(gpio_num_t i2c_gpio_sda, gpio_num_t i2c_gpio_scl, i2c_mas
         .scl_io_num = i2c_gpio_scl,                                /*!< SCL GPIO pin */
         .clk_source = I2C_CLK_SRC_DEFAULT,                         /*!< Select default clock source */
         .glitch_ignore_cnt = 7,                                    /*!< Glitch filter (typical value) */
-        .flags.enable_internal_pullup = LD_ENABLE_INTERNAL_PULLUP, /*!< Enable internal weak pull-ups */
+        .flags.enable_internal_pullup = LD_CFG_ENABLE_INTERNAL_PULLUP, /*!< Enable internal weak pull-ups */
     };
 
     // 3. Install Driver
@@ -66,17 +66,17 @@ esp_err_t pca9955b_init(pca9955b_dev_t* pca9955b, uint8_t i2c_addr, i2c_master_b
     i2c_device_config_t i2c_dev_config = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7, /*!< 7-bit address mode */
         .device_address = i2c_addr,            /*!< Target device address */
-        .scl_speed_hz = I2C_FREQ,              /*!< Bus clock frequency */
+        .scl_speed_hz = LD_CFG_I2C_FREQ_HZ,    /*!< Bus clock frequency */
         .flags.disable_ack_check = false,      // We want to ensure device is connected
     };
 
     ESP_GOTO_ON_ERROR(i2c_master_bus_add_device(i2c_bus_handle, &i2c_dev_config, &pca9955b->i2c_dev_handle), err, TAG, "Failed to add I2C device");
 
-    ESP_GOTO_ON_ERROR(i2c_master_transmit(pca9955b->i2c_dev_handle, IREF_cmd, sizeof(IREF_cmd), I2C_TIMEOUT_MS), err_dev, TAG, "Failed to set default IREF");
+    ESP_GOTO_ON_ERROR(i2c_master_transmit(pca9955b->i2c_dev_handle, IREF_cmd, sizeof(IREF_cmd), LD_CFG_I2C_TIMEOUT_MS), err_dev, TAG, "Failed to set default IREF");
     pca9955b->need_reset_IREF = false;
 
     // 2. Clear LEDs (Set Black)
-    ESP_GOTO_ON_ERROR(i2c_master_transmit(pca9955b->i2c_dev_handle, (uint8_t*)&pca9955b->buffer, sizeof(pca9955b_buffer_t), I2C_TIMEOUT_MS), err_dev, TAG, "Failed to clear LEDs (Black)");
+    ESP_GOTO_ON_ERROR(i2c_master_transmit(pca9955b->i2c_dev_handle, (uint8_t*)&pca9955b->buffer, sizeof(pca9955b_buffer_t), LD_CFG_I2C_TIMEOUT_MS), err_dev, TAG, "Failed to clear LEDs (Black)");
 
     ESP_LOGI(TAG, "Device initialized at address 0x%02x", i2c_addr);
     return ESP_OK;
@@ -126,7 +126,7 @@ esp_err_t pca9955b_show(pca9955b_dev_t* pca9955b) {
 
     // 2. IREF Restoration Logic (Recover from previous failure)
     if(pca9955b->need_reset_IREF) {
-        ret = i2c_master_transmit(pca9955b->i2c_dev_handle, IREF_cmd, sizeof(IREF_cmd), I2C_TIMEOUT_MS);
+        ret = i2c_master_transmit(pca9955b->i2c_dev_handle, IREF_cmd, sizeof(IREF_cmd), LD_CFG_I2C_TIMEOUT_MS);
 
         if(ret == ESP_OK) {
             pca9955b->need_reset_IREF = false; /*!< IREF reset completed */
@@ -143,7 +143,7 @@ esp_err_t pca9955b_show(pca9955b_dev_t* pca9955b) {
     ret = i2c_master_transmit(pca9955b->i2c_dev_handle,
                               (uint8_t*)&pca9955b->buffer,
                               sizeof(pca9955b_buffer_t),  // Safer than hardcoding '16'
-                              I2C_TIMEOUT_MS);
+                              LD_CFG_I2C_TIMEOUT_MS);
 
     if(ret != ESP_OK) {
         // 4. Error Handling & Recovery Prep
@@ -168,7 +168,7 @@ esp_err_t pca9955b_del(pca9955b_dev_t* pca9955b) {
         memset(pca9955b->buffer.data, 0, sizeof(pca9955b->buffer.data));
 
         // Direct transmit: do NOT call higher-level show()
-        i2c_master_transmit(pca9955b->i2c_dev_handle, (uint8_t*)&pca9955b->buffer, sizeof(pca9955b_buffer_t), I2C_TIMEOUT_MS);
+        i2c_master_transmit(pca9955b->i2c_dev_handle, (uint8_t*)&pca9955b->buffer, sizeof(pca9955b_buffer_t), LD_CFG_I2C_TIMEOUT_MS);
     }
 
     // 2. Remove device from I2C bus

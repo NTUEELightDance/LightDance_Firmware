@@ -48,7 +48,7 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
     }
 
     /* ===== PCA9955B enable flags ===== */
-    for(int i = 0; i < PCA9955B_CH_NUM; i++) {
+    for(int i = 0; i < LD_BOARD_PCA9955B_CH_NUM; i++) {
         uint8_t v;
         if(f_read(&fp, &v, 1, &br) != FR_OK || br != 1) {
             goto io_fail;
@@ -63,14 +63,14 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
     }
 
     /* ===== WS2812B strip LED counts ===== */
-    for(int i = 0; i < WS2812B_NUM; i++) {
+    for(int i = 0; i < LD_BOARD_WS2812B_NUM; i++) {
         uint8_t v;
         if(f_read(&fp, &v, 1, &br) != FR_OK || br != 1) {
             goto io_fail;
         }
 
-        if(v > WS2812B_MAX_PIXEL_NUM) {
-            ESP_LOGE(TAG, "strip_led_num[%d]=%u > %u", i, v, WS2812B_MAX_PIXEL_NUM);
+        if(v > LD_BOARD_WS2812B_MAX_PIXEL_NUM) {
+            ESP_LOGE(TAG, "strip_led_num[%d]=%u > %u", i, v, LD_BOARD_WS2812B_MAX_PIXEL_NUM);
             goto fmt_fail;
         }
 
@@ -85,7 +85,7 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
 
     f_close(&fp);
 
-    ESP_LOGI(TAG, "channel info loaded: PCA=%d, WS=%d", PCA9955B_CH_NUM, WS2812B_NUM);
+    ESP_LOGI(TAG, "channel info loaded: PCA=%d, WS=%d", LD_BOARD_PCA9955B_CH_NUM, LD_BOARD_WS2812B_NUM);
 
     return ESP_OK;
 
@@ -154,12 +154,12 @@ fmt_fail:
 //                    ((uint16_t)ver_bytes[1] << 8);
 
 //     /* ===== OF enable flags (40) ===== */
-//     if (f_read(&fp, out->of_enable, PCA9955B_CH_NUM, &br) != FR_OK ||
-//         br != PCA9955B_CH_NUM)
+//     if (f_read(&fp, out->of_enable, LD_BOARD_PCA9955B_CH_NUM, &br) != FR_OK ||
+//         br != LD_BOARD_PCA9955B_CH_NUM)
 //         goto io_fail;
 
 //     /* constraint: OF enable must be 0 or 1 */
-//     for (int i = 0; i < PCA9955B_CH_NUM; i++) {
+//     for (int i = 0; i < LD_BOARD_PCA9955B_CH_NUM; i++) {
 //         if (out->of_enable[i] > 1) {
 //             ESP_LOGE(TAG, "of_enable[%d]=%u invalid", i, out->of_enable[i]);
 //             goto fmt_fail;
@@ -168,18 +168,18 @@ fmt_fail:
 
 //     /* ===== Strip LED counts (8) ===== */
 //     /* ===== Strip LED counts (8) ===== */
-//     for (int i = 0; i < WS2812B_NUM; i++) {
+//     for (int i = 0; i < LD_BOARD_WS2812B_NUM; i++) {
 //         uint8_t v;
 //         if (f_read(&fp, &v, 1, &br) != FR_OK || br != 1)
 //             goto io_fail;
 
 //         out->strip_led_num[i] = v;
 
-//         if (out->strip_led_num[i] > WS2812B_MAX_PIXEL_NUM) {
+//         if (out->strip_led_num[i] > LD_BOARD_WS2812B_MAX_PIXEL_NUM) {
 //             ESP_LOGE(TAG, "strip_led_num[%d]=%u > %u",
 //                     i,
 //                     (unsigned)out->strip_led_num[i],
-//                     (unsigned)WS2812B_MAX_PIXEL_NUM);
+//                     (unsigned)LD_BOARD_WS2812B_MAX_PIXEL_NUM);
 //             goto fmt_fail;
 //         }
 //     }

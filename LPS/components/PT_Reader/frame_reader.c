@@ -39,11 +39,11 @@ esp_err_t frame_reader_init(const char* path) {
     uint32_t of_cnt = 0;
     uint32_t led_cnt = 0;
 
-    for(int i = 0; i < PCA9955B_CH_NUM; i++)
+    for(int i = 0; i < LD_BOARD_PCA9955B_CH_NUM; i++)
         if(ch_info_snapshot.i2c_leds[i])
             of_cnt++;
 
-    for(int i = 0; i < WS2812B_NUM; i++)
+    for(int i = 0; i < LD_BOARD_WS2812B_NUM; i++)
         led_cnt += ch_info_snapshot.rmt_strips[i];
 
     if(of_cnt == 0 && led_cnt == 0) {
@@ -144,7 +144,7 @@ esp_err_t frame_reader_read(table_frame_t* out) {
     p += 1;
 
     /* -------- OF GRB (only enabled) -------- */
-    for(int ch = 0; ch < PCA9955B_CH_NUM; ch++) {
+    for(int ch = 0; ch < LD_BOARD_PCA9955B_CH_NUM; ch++) {
         if(!ch_info_snapshot.i2c_leds[ch])
             continue;
 
@@ -164,7 +164,7 @@ esp_err_t frame_reader_read(table_frame_t* out) {
     }
 
     /* -------- WS2812B LED strips -------- */
-    for(int strip = 0; strip < WS2812B_NUM; strip++) {
+    for(int strip = 0; strip < LD_BOARD_WS2812B_NUM; strip++) {
         uint16_t cnt = ch_info_snapshot.rmt_strips[strip];
 
         for(uint16_t i = 0; i < cnt; i++) {

@@ -14,16 +14,16 @@ extern "C" {
 #endif
 
 /** Number of WS2812B strips driven by RMT. */
-#define WS2812B_NUM 8
+#define LD_BOARD_WS2812B_NUM 8
 /** Per-strip compile-time maximum pixel capacity. */
-#define WS2812B_MAX_PIXEL_NUM 100
+#define LD_BOARD_WS2812B_MAX_PIXEL_NUM 100
 
 /** Number of PCA9955B chips on the I2C bus. */
-#define PCA9955B_NUM 8
+#define LD_BOARD_PCA9955B_NUM 8
 /** RGB outputs per PCA9955B chip. */
-#define PCA9955B_RGB_PER_IC 5
+#define LD_BOARD_PCA9955B_RGB_PER_IC 5
 /** Total PCA9955B RGB channels. */
-#define PCA9955B_CH_NUM (PCA9955B_RGB_PER_IC * PCA9955B_NUM)
+#define LD_BOARD_PCA9955B_CH_NUM (LD_BOARD_PCA9955B_RGB_PER_IC * LD_BOARD_PCA9955B_NUM)
 
 /**
  * @brief Immutable hardware mapping for the current board.
@@ -31,7 +31,7 @@ extern "C" {
 typedef struct {
     /** @brief PCA9955B I2C addresses for channels 0..39 (5 channels per IC). */
     union {
-        uint8_t i2c_addrs[PCA9955B_NUM];
+        uint8_t i2c_addrs[LD_BOARD_PCA9955B_NUM];
 
         struct {
             uint8_t pca9955b_0;  /**< channels 0..4 */
@@ -47,7 +47,7 @@ typedef struct {
 
     /** @brief WS2812B GPIO pins for strip channels 40..47. */
     union {
-        gpio_num_t rmt_pins[WS2812B_NUM];
+        gpio_num_t rmt_pins[LD_BOARD_WS2812B_NUM];
 
         struct {
             gpio_num_t ws2812b_0;  /**< channel 40 */
@@ -68,11 +68,11 @@ typedef struct {
  */
 typedef struct {
     union {
-        uint16_t pixel_counts[WS2812B_NUM + PCA9955B_CH_NUM]; /**< Flat view of all channel counts. */
+        uint16_t pixel_counts[LD_BOARD_WS2812B_NUM + LD_BOARD_PCA9955B_CH_NUM]; /**< Flat view of all channel counts. */
 
         struct {
-            uint16_t rmt_strips[WS2812B_NUM];   /**< Pixel count per WS2812B strip. */
-            uint16_t i2c_leds[PCA9955B_CH_NUM]; /**< Pixel count per PCA9955B RGB channel. */
+            uint16_t rmt_strips[LD_BOARD_WS2812B_NUM];   /**< Pixel count per WS2812B strip. */
+            uint16_t i2c_leds[LD_BOARD_PCA9955B_CH_NUM]; /**< Pixel count per PCA9955B RGB channel. */
         };
     };
 } ch_info_t;

@@ -30,8 +30,8 @@ esp_err_t LedController::init() {
     ESP_GOTO_ON_ERROR(i2c_bus_init(GPIO_NUM_21, GPIO_NUM_22, &bus_handle), err, TAG, "Failed to initialize I2C bus");
 
     // 4. Initialize WS2812B Strips
-    for(int i = 0; i < WS2812B_NUM; i++) {
-#if LD_IGNORE_DRIVER_INIT_FAIL
+    for(int i = 0; i < LD_BOARD_WS2812B_NUM; i++) {
+#if LD_CFG_IGNORE_DRIVER_INIT_FAIL
         ws2812b_init(&ws2812b_devs[i], BOARD_HW_CONFIG.rmt_pins[i], ch_info.rmt_strips[i]);
 #else
         ESP_GOTO_ON_ERROR(ws2812b_init(&ws2812b_devs[i], BOARD_HW_CONFIG.rmt_pins[i], ch_info.rmt_strips[i]), err, TAG, "Failed to init WS2812B[%d]", i);
@@ -39,8 +39,8 @@ esp_err_t LedController::init() {
     }
 
     // 5. Initialize PCA9955B Chips
-    for(int i = 0; i < PCA9955B_NUM; i++) {
-#if LD_IGNORE_DRIVER_INIT_FAIL
+    for(int i = 0; i < LD_BOARD_PCA9955B_NUM; i++) {
+#if LD_CFG_IGNORE_DRIVER_INIT_FAIL
         if(pca9955b_init(&pca9955b_devs[i], BOARD_HW_CONFIG.i2c_addrs[i], bus_handle) == ESP_OK) {
             pca_enable[i] = true;
         };
@@ -71,15 +71,15 @@ esp_err_t LedController::write_buffer(int ch_idx, uint8_t* data) {
     ESP_RETURN_ON_FALSE(data, ESP_ERR_INVALID_ARG, TAG, "Data buffer is NULL");
 
     // 2. Handle PCA9955B Strips
-    if(ch_idx < PCA9955B_CH_NUM) {
+    if(ch_idx < LD_BOARD_PCA9955B_CH_NUM) {
 
         // Calculate device and pixel index (5 LEDs per PCA9955B chip)
         int dev_idx = ch_idx / 5;
         int pixel_idx = ch_idx % 5;
 
         // Validate PCA device bounds
-        if(dev_idx >= PCA9955B_NUM) {
-            ESP_LOGE(TAG, "Channel index %d out of range (Max PCA dev: %d)", ch_idx, PCA9955B_NUM - 1);
+        if(dev_idx >= LD_BOARD_PCA9955B_NUM) {
+            ESP_LOGE(TAG, "Channel index %d out of range (Max PCA dev: %d)", ch_idx, LD_BOARD_PCA9955B_NUM - 1);
             return ESP_ERR_INVALID_ARG;
         }
 
@@ -96,12 +96,12 @@ esp_err_t LedController::write_buffer(int ch_idx, uint8_t* data) {
     }
 
     // 3. Handle WS2812B Strips
-    if(ch_idx >= PCA9955B_CH_NUM) {
+    if(ch_idx >= LD_BOARD_PCA9955B_CH_NUM) {
         // Ensure the device handle is valid before writing
-        ESP_RETURN_ON_FALSE(&ws2812b_devs[ch_idx - PCA9955B_CH_NUM], ESP_ERR_INVALID_STATE, TAG, "WS2812B[%d] not initialized", ch_idx - PCA9955B_CH_NUM);
+        ESP_RETURN_ON_FALSE(&ws2812b_devs[ch_idx - LD_BOARD_PCA9955B_CH_NUM], ESP_ERR_INVALID_STATE, TAG, "WS2812B[%d] not initialized", ch_idx - LD_BOARD_PCA9955B_CH_NUM);
 
         // Pass the full strip buffer to the HAL
-        return ws2812b_write(&ws2812b_devs[ch_idx - PCA9955B_CH_NUM], data);
+        return ws2812b_write(&ws2812b_devs[ch_idx - LD_BOARD_PCA9955B_CH_NUM], data);
     }
 
     return ESP_ERR_INVALID_ARG;
@@ -116,7 +116,7 @@ esp_err_t LedController::show() {
 #endif
 
     // 1. Trigger WS2812B transmission (Asynchronous/Non-blocking)
-    for(int i = 0; i < WS2812B_NUM / 2; i++) {
+    for(int i = 0; i < LD_BOARD_WS2812B_NUM / 2; i++) {
         err = ws2812b_show(&ws2812b_devs[i]);
         if(err != ESP_OK) {
             // Log error but continue to try updating other LEDs
@@ -126,7 +126,7 @@ esp_err_t LedController::show() {
     }
 
     // 3. Wait for WS2812B transmission to complete
-    for(int i = 0; i < WS2812B_NUM / 2; i++) {
+    for(int i = 0; i < LD_BOARD_WS2812B_NUM / 2; i++) {
         err = ws2812b_wait_done(&ws2812b_devs[i]);
         if(err != ESP_OK) {
             ESP_LOGE(TAG, "Wait done failed for WS2812B[%d]: %s", i, esp_err_to_name(err));
@@ -135,7 +135,7 @@ esp_err_t LedController::show() {
     }
 
     // 2. Trigger PCA9955B transmission (Synchronous/Blocking)
-    for(int i = 0; i < PCA9955B_NUM / 2; i++) {
+    for(int i = 0; i < LD_BOARD_PCA9955B_NUM / 2; i++) {
         if(!pca_enable[i]) {
             continue;
         }
@@ -147,7 +147,7 @@ esp_err_t LedController::show() {
     }
 
     // 1. Trigger WS2812B transmission (Asynchronous/Non-blocking)
-    for(int i = WS2812B_NUM / 2; i < WS2812B_NUM; i++) {
+    for(int i = LD_BOARD_WS2812B_NUM / 2; i < LD_BOARD_WS2812B_NUM; i++) {
         err = ws2812b_show(&ws2812b_devs[i]);
         if(err != ESP_OK) {
             // Log error but continue to try updating other LEDs
@@ -157,7 +157,7 @@ esp_err_t LedController::show() {
     }
 
     // 3. Wait for WS2812B transmission to complete
-    for(int i = WS2812B_NUM / 2; i < WS2812B_NUM; i++) {
+    for(int i = LD_BOARD_WS2812B_NUM / 2; i < LD_BOARD_WS2812B_NUM; i++) {
         err = ws2812b_wait_done(&ws2812b_devs[i]);
         if(err != ESP_OK) {
             ESP_LOGE(TAG, "Wait done failed for WS2812B[%d]: %s", i, esp_err_to_name(err));
@@ -166,7 +166,7 @@ esp_err_t LedController::show() {
     }
 
     // 2. Trigger PCA9955B transmission (Synchronous/Blocking)
-    for(int i = PCA9955B_NUM / 2; i < PCA9955B_NUM; i++) {
+    for(int i = LD_BOARD_PCA9955B_NUM / 2; i < LD_BOARD_PCA9955B_NUM; i++) {
         if(!pca_enable[i]) {
             continue;
         }
@@ -190,12 +190,12 @@ esp_err_t LedController::deinit() {
     ESP_LOGI(TAG, "De-initializing LED Controller...");
 
     // 1. Free WS2812B Devices
-    for(int i = 0; i < WS2812B_NUM; i++) {
+    for(int i = 0; i < LD_BOARD_WS2812B_NUM; i++) {
         ESP_RETURN_ON_ERROR(ws2812b_del(&ws2812b_devs[i]), TAG, "Failed to delete WS2812B[%d]", i);
     }
 
     // 2. Free PCA9955B Devices
-    for(int i = 0; i < PCA9955B_NUM; i++) {
+    for(int i = 0; i < LD_BOARD_PCA9955B_NUM; i++) {
         if(!pca_enable[i]) {
             continue;
         }
@@ -220,7 +220,7 @@ esp_err_t LedController::fill(uint8_t red, uint8_t green, uint8_t blue) {
     esp_err_t err = ESP_OK;
 
     // 1. Fill WS2812B Strips
-    for(int i = 0; i < WS2812B_NUM; i++) {
+    for(int i = 0; i < LD_BOARD_WS2812B_NUM; i++) {
         // Ensure the device handle is valid before operation
         err = ws2812b_fill(&ws2812b_devs[i], red, green, blue);
 
@@ -231,7 +231,7 @@ esp_err_t LedController::fill(uint8_t red, uint8_t green, uint8_t blue) {
     }
 
     // 2. Fill PCA9955B Chips
-    for(int i = 0; i < PCA9955B_NUM; i++) {
+    for(int i = 0; i < LD_BOARD_PCA9955B_NUM; i++) {
         // Ensure the device handle is valid
         err = pca9955b_fill(&pca9955b_devs[i], red, green, blue);
 
@@ -266,7 +266,7 @@ esp_err_t LedController::black_out() {
 }
 
 void LedController::print_buffer() {
-    for(int i = 0; i < WS2812B_NUM; i++) {
+    for(int i = 0; i < LD_BOARD_WS2812B_NUM; i++) {
         ws2812b_print_buffer(&ws2812b_devs[i]);
     }
 }

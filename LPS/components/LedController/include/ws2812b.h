@@ -18,7 +18,7 @@ typedef struct {
 
     gpio_num_t gpio_num; /*!< Number of the gpio pin */
     uint16_t pixel_num;  /*!< Number of pixels in the LED strip */
-    uint8_t buffer[3 * WS2812B_MAX_PIXEL_NUM];
+    uint8_t buffer[3 * LD_BOARD_WS2812B_MAX_PIXEL_NUM];
 } ws2812b_dev_t;
 
 esp_err_t ws2812b_init(ws2812b_dev_t* strip, gpio_num_t gpio_num, uint16_t pixel_num);

@@ -208,14 +208,14 @@ static inline grb8_t grb_set_brightness(grb8_t in, led_type_t type) {
     grb8_t out;
     switch(type) {
         case LED_WS2812B:
-            out.r = mul255_u8(in.r, LED_MAX_BRIGHTNESS);
-            out.g = mul255_u8(in.g, LED_MAX_BRIGHTNESS);
-            out.b = mul255_u8(in.b, LED_MAX_BRIGHTNESS);
+            out.r = mul255_u8(in.r, LD_CFG_WS2812B_MAX_BRIGHTNESS);
+            out.g = mul255_u8(in.g, LD_CFG_WS2812B_MAX_BRIGHTNESS);
+            out.b = mul255_u8(in.b, LD_CFG_WS2812B_MAX_BRIGHTNESS);
             return out;
         case LED_PCA9955B:
-            out.r = mul255_u8(in.r, OF_MAX_BRIGHTNESS_R);
-            out.g = mul255_u8(in.g, OF_MAX_BRIGHTNESS_G);
-            out.b = mul255_u8(in.b, OF_MAX_BRIGHTNESS_B);
+            out.r = mul255_u8(in.r, LD_CFG_PCA9955B_MAX_BRIGHTNESS_R);
+            out.g = mul255_u8(in.g, LD_CFG_PCA9955B_MAX_BRIGHTNESS_G);
+            out.b = mul255_u8(in.b, LD_CFG_PCA9955B_MAX_BRIGHTNESS_B);
             return out;
         default:
             return GRB_BLACK;

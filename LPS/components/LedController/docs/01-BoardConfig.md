@@ -15,12 +15,12 @@ Key macros defining the system limits and bus parameters:
 
 | Macro | Value | Description |
 | :--- | :--- | :--- |
-| `WS2812B_NUM` | **8** | Number of RMT channels for WS2812B strips. |
-| `WS2812B_MAX_PIXEL_NUM` | **100** | Max pixels supported per single strip. |
-| `PCA9955B_NUM` | **8** | Number of PCA9955B ICs (Currently disabled). |
-| `I2C_FREQ` | **400 kHz** | I2C Bus Frequency. |
-| `I2C_TIMEOUT_MS` | **2 ms** | Timeout for I2C transactions. |
-| `RMT_TIMEOUT_MS` | **5 ms** | Timeout for RMT operations. |
+| `LD_BOARD_WS2812B_NUM` | **8** | Number of RMT channels for WS2812B strips. |
+| `LD_BOARD_WS2812B_MAX_PIXEL_NUM` | **100** | Max pixels supported per single strip. |
+| `LD_BOARD_PCA9955B_NUM` | **8** | Number of PCA9955B ICs (Currently disabled). |
+| `LD_CFG_I2C_FREQ_HZ` | **400 kHz** | I2C Bus Frequency. |
+| `LD_CFG_I2C_TIMEOUT_MS` | **2 ms** | Timeout for I2C transactions. |
+| `LD_CFG_RMT_TIMEOUT_MS` | **10 ms** | Timeout for RMT operations. |
 
 ## 3. Hardware Pinout & Mapping
 
@@ -62,7 +62,7 @@ Stores the constant hardware pin/address definitions.
 ```c
 typedef struct {
     union {
-        gpio_num_t rmt_pins[WS2812B_NUM]; // Array access for loops
+        gpio_num_t rmt_pins[LD_BOARD_WS2812B_NUM]; // Array access for loops
         struct {
             gpio_num_t ws2812b_0;         // Named access
             // ...
@@ -81,8 +81,8 @@ typedef struct {
     union {
         uint16_t pixel_counts[TOTAL_CH]; // Flat array for all channels
         struct {
-            uint16_t rmt_strips[WS2812B_NUM];
-            uint16_t i2c_leds[PCA9955B_CH_NUM];
+            uint16_t rmt_strips[LD_BOARD_WS2812B_NUM];
+            uint16_t i2c_leds[LD_BOARD_PCA9955B_CH_NUM];
         };
     };
 } ch_info_t;
@@ -90,14 +90,14 @@ typedef struct {
 
 ## 5. Usage Example
 ```c
-#include "BoardConfig.h"
+#include "ld_board.h"
 
 void init_hardware() {
     // Access via array for bulk initialization
-    for (int i = 0; i < WS2812B_NUM; i++) {
+    for (int i = 0; i < LD_BOARD_WS2812B_NUM; i++) {
         gpio_num_t pin = BOARD_HW_CONFIG.rmt_pins[i];
     }
-    for (int i = 0; i < PCA9955B_NUM; i++) {
+    for (int i = 0; i < LD_BOARD_PCA9955B_NUM; i++) {
         uint8_t addr = BOARD_HW_CONFIG.i2c_addrs[i];
     }
 }
