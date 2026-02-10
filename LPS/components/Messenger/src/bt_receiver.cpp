@@ -502,6 +502,9 @@ esp_err_t bt_receiver_init(const bt_receiver_config_t* config) {
 }
 
 esp_err_t bt_receiver_start(void) {
+    ESP_LOGI(TAG, "bt_receiver_start enter (core=%d)", xPortGetCoreID());
+    ESP_LOGI(TAG, "bt status=%d, send_avail=%d", esp_bt_controller_get_status(), esp_vhci_host_check_send_available());
+
     if(s_is_running)
         return ESP_OK;
     uint16_t sz = make_cmd_reset(hci_cmd_buf);
@@ -519,7 +522,7 @@ esp_err_t bt_receiver_start(void) {
     sz = make_cmd_ble_set_scan_enable(hci_cmd_buf, 1, 0);
     esp_vhci_host_send_packet(hci_cmd_buf, sz);
     s_is_running = true;
-    xTaskCreatePinnedToCore(sync_process_task, "bt_rx_task", 4096, NULL, 5, &s_task_handle, 1);
+    xTaskCreatePinnedToCore(sync_process_task, "bt_rx_task", 4096, NULL, 5, &s_task_handle, 0);
     ESP_LOGI(TAG, "Receiver Started");
     return ESP_OK;
 }

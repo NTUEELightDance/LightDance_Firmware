@@ -209,14 +209,6 @@ esp_err_t Player::acquireResources() {
         return ESP_OK;
     }
 
-    /* ---- hardware config (temporary placement) ---- */
-    for(int i = 0; i < WS2812B_NUM; i++) {
-        ch_info.rmt_strips[i] = WS2812B_MAX_PIXEL_NUM;
-    }
-    for(int i = 0; i < PCA9955B_CH_NUM; i++) {
-        ch_info.i2c_leds[i] = 1;
-    }
-
     ESP_RETURN_ON_FALSE(eventQueue != nullptr, ESP_ERR_NO_MEM, TAG, "eventQueue is NULL");
     ESP_RETURN_ON_ERROR(controller.init(), TAG, "controller init failed");
     ESP_RETURN_ON_ERROR(fb.init(), TAG, "framebuffer init failed");

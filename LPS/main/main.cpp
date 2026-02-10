@@ -40,6 +40,15 @@ static void app_task(void* arg) {
 #endif
 
     calc_gamma_lut();
+
+    /* ---- hardware config (temporary placement) ---- */
+    for(int i = 0; i < WS2812B_NUM; i++) {
+        ch_info.rmt_strips[i] = WS2812B_MAX_PIXEL_NUM;
+    }
+    for(int i = 0; i < PCA9955B_CH_NUM; i++) {
+        ch_info.i2c_leds[i] = 1;
+    }
+
     Player::getInstance().init();
 
 #if BT_ENABLE
