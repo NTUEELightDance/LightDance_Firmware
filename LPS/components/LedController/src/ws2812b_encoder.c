@@ -1,24 +1,23 @@
 #include "ws2812b_encoder.h"
 
 #include "esp_attr.h"
-
-#define WS2812B_RESOLUTION 10000000 /*!< RMT tick resolution: 10 MHz (1 tick = 0.1 us) */
+#include "ld_board.h"
 
 #define RMT_BYTES_ENCODER_CONFIG_DEFAULT()                                                            \
     {                                                                                                 \
         .bit0 =                                                                                       \
             {                                                                                         \
                 .level0 = 1,                                                                          \
-                .duration0 = (uint32_t)(0.4 * (WS2812B_RESOLUTION) / 1000000), /*!< T0H ≈ 0.4 us */   \
+                .duration0 = (uint32_t)(0.4 * (LD_BOARD_WS2812B_RMT_RESOLUTION_HZ) / 1000000), /*!< T0H ≈ 0.4 us */   \
                 .level1 = 0,                                                                          \
-                .duration1 = (uint32_t)(0.85 * (WS2812B_RESOLUTION) / 1000000), /*!< T0L ≈ 0.85 us */ \
+                .duration1 = (uint32_t)(0.85 * (LD_BOARD_WS2812B_RMT_RESOLUTION_HZ) / 1000000), /*!< T0L ≈ 0.85 us */ \
             },                                                                                        \
         .bit1 =                                                                                       \
             {                                                                                         \
                 .level0 = 1,                                                                          \
-                .duration0 = (uint32_t)(0.8 * (WS2812B_RESOLUTION) / 1000000), /*!< T1H ≈ 0.8 us */   \
+                .duration0 = (uint32_t)(0.8 * (LD_BOARD_WS2812B_RMT_RESOLUTION_HZ) / 1000000), /*!< T1H ≈ 0.8 us */   \
                 .level1 = 0,                                                                          \
-                .duration1 = (uint32_t)(0.45 * (WS2812B_RESOLUTION) / 1000000), /*!< T1L ≈ 0.45 us */ \
+                .duration1 = (uint32_t)(0.45 * (LD_BOARD_WS2812B_RMT_RESOLUTION_HZ) / 1000000), /*!< T1L ≈ 0.45 us */ \
             },                                                                                        \
         .flags =                                                                                      \
             {                                                                                         \
@@ -26,8 +25,8 @@
             },                                                                                        \
     }
 
-/*! Reset code length for WS2812B: ≥ 50 us (converted to 10 MHz RMT ticks) */
-#define WS2812B_RESET_TICKS (WS2812B_RESOLUTION / 1000000 * 50 / 2)
+/*! Reset code length for WS2812B: ≥ 50 us (converted to configured RMT ticks) */
+#define WS2812B_RESET_TICKS (LD_BOARD_WS2812B_RMT_RESOLUTION_HZ / 1000000 * 50 / 2)
 
 #define WS2812B_RESET_CODE_DEFAULT()                                     \
     ((rmt_symbol_word_t){                                                \
@@ -65,8 +64,7 @@ typedef struct {
  * @param ret_state     Pointer to return encoding result flags
  * @return Number of encoded RMT symbols
  */
-static IRAM_ATTR size_t
-encode(rmt_encoder_t* rmt_encoder, rmt_channel_handle_t rmt_channel, const void* buffer, size_t buffer_size, rmt_encode_state_t* ret_state) {
+static IRAM_ATTR size_t encode(rmt_encoder_t* rmt_encoder, rmt_channel_handle_t rmt_channel, const void* buffer, size_t buffer_size, rmt_encode_state_t* ret_state) {
     /* Cast to local encoder container */
     encoder_t* ws2812b_encoder = __containerof(rmt_encoder, encoder_t, base);
 
@@ -93,8 +91,7 @@ encode(rmt_encoder_t* rmt_encoder, rmt_channel_handle_t rmt_channel, const void*
             /* fall through */
 
         case 1: /*!< Send WS2812B reset symbol */
-            encoded_symbols +=
-                copy_encoder->encode(copy_encoder, rmt_channel, &ws2812b_encoder->reset_code, sizeof(ws2812b_encoder->reset_code), &session_state);
+            encoded_symbols += copy_encoder->encode(copy_encoder, rmt_channel, &ws2812b_encoder->reset_code, sizeof(ws2812b_encoder->reset_code), &session_state);
             if(session_state & RMT_ENCODING_COMPLETE) {
                 ws2812b_encoder->state = RMT_ENCODING_RESET; /*!< Reset FSM */
                 state |= RMT_ENCODING_COMPLETE;

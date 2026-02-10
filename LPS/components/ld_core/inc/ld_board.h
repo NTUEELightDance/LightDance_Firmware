@@ -18,6 +18,19 @@ extern "C" {
 /** Per-strip compile-time maximum pixel capacity. */
 #define LD_BOARD_WS2812B_MAX_PIXEL_NUM 100
 
+/** I2C pins used by LedController bus init. */
+#define LD_BOARD_I2C_SDA_GPIO GPIO_NUM_21
+#define LD_BOARD_I2C_SCL_GPIO GPIO_NUM_22
+/** I2C probe timeout for PCA device detection. */
+#define LD_BOARD_I2C_PROBE_TIMEOUT_MS 100
+/** I2C glitch filter count used by master bus config. */
+#define LD_BOARD_I2C_GLITCH_IGNORE_CNT 7
+
+/** WS2812B RMT timing and channel capacity. */
+#define LD_BOARD_WS2812B_RMT_RESOLUTION_HZ 10000000
+#define LD_BOARD_RMT_MEM_BLOCK_SYMBOLS 64
+#define LD_BOARD_RMT_TRANS_QUEUE_DEPTH 8
+
 /** Number of PCA9955B chips on the I2C bus. */
 #define LD_BOARD_PCA9955B_NUM 8
 /** RGB outputs per PCA9955B chip. */

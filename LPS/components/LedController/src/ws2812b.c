@@ -5,7 +5,6 @@
 #include "esp_check.h"
 #include "esp_log.h"
 
-#define WS2812B_RESOLUTION 10000000
 static const char* TAG = "WS2812";
 
 // Config: One-shot transmission, idle low (reset), non-blocking
@@ -26,10 +25,10 @@ static esp_err_t ws2812b_init_channel(gpio_num_t gpio_num, uint16_t pixel_num, r
     rmt_tx_channel_config_t rmt_tx_channel_config = {
         .gpio_num = gpio_num,
         .clk_src = RMT_CLK_SRC_DEFAULT,
-        .resolution_hz = WS2812B_RESOLUTION,
+        .resolution_hz = LD_BOARD_WS2812B_RMT_RESOLUTION_HZ,
         .intr_priority = 0,
-        .mem_block_symbols = 64,
-        .trans_queue_depth = 8,
+        .mem_block_symbols = LD_BOARD_RMT_MEM_BLOCK_SYMBOLS,
+        .trans_queue_depth = LD_BOARD_RMT_TRANS_QUEUE_DEPTH,
         .flags.with_dma = 0,
     };
 
@@ -82,18 +81,16 @@ err:
     return ret;
 }
 
-esp_err_t ws2812b_write(ws2812b_dev_t* ws2812b, uint8_t* _buffer) {
+esp_err_t ws2812b_write_grb(ws2812b_dev_t* ws2812b, const grb8_t* colors, uint16_t count) {
     // 1. Validate Handle
     ESP_RETURN_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, TAG, "Handle is NULL");
 
     // 2. Validate Source Buffer
-    ESP_RETURN_ON_FALSE(_buffer, ESP_ERR_INVALID_ARG, TAG, "Source buffer is NULL");
-
-    // 3. Validate Internal Buffer (Defensive Programming)
-    ESP_RETURN_ON_FALSE(ws2812b->buffer, ESP_ERR_INVALID_STATE, TAG, "Internal buffer is not allocated");
+    ESP_RETURN_ON_FALSE(colors, ESP_ERR_INVALID_ARG, TAG, "Source buffer is NULL");
+    ESP_RETURN_ON_FALSE(count <= ws2812b->pixel_num, ESP_ERR_INVALID_ARG, TAG, "count out of range (max=%d)", ws2812b->pixel_num);
 
     // 4. Perform Fast Copy
-    memcpy(ws2812b->buffer, _buffer, ws2812b->pixel_num * 3 * sizeof(uint8_t));
+    memcpy(ws2812b->buffer, (const uint8_t*)colors, count * sizeof(grb8_t));
 
     return ESP_OK;
 }
@@ -156,35 +153,32 @@ esp_err_t ws2812b_del(ws2812b_dev_t* ws2812b) {
     return ESP_OK;
 }
 
-esp_err_t ws2812b_set_pixel(ws2812b_dev_t* ws2812b, int pixel_idx, uint8_t red, uint8_t green, uint8_t blue) {
+esp_err_t ws2812b_set_pixel(ws2812b_dev_t* ws2812b, int pixel_idx, grb8_t color) {
     // 1. Check if handle exists
     ESP_RETURN_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, TAG, "Handle is NULL");
 
     // 2. Check for Buffer Overflow (CRITICAL)
     if(pixel_idx < 0 || pixel_idx >= ws2812b->pixel_num) {
-        ESP_LOGE(TAG, "Pixel index %d out of bounds (Max: %d)", pixel_idx, ws2812b->pixel_num);
+        ESP_LOGW(TAG, "Pixel index %d out of bounds (Max: %d)", pixel_idx, ws2812b->pixel_num);
         return ESP_ERR_INVALID_ARG;
     }
 
     // 3. Set Color (GRB Format for WS2812B)
     uint32_t offset = pixel_idx * 3;
-    ws2812b->buffer[offset + 0] = green;
-    ws2812b->buffer[offset + 1] = red;
-    ws2812b->buffer[offset + 2] = blue;
+    ws2812b->buffer[offset + 0] = color.g;
+    ws2812b->buffer[offset + 1] = color.r;
+    ws2812b->buffer[offset + 2] = color.b;
 
     return ESP_OK;
 }
 
-esp_err_t ws2812b_fill(ws2812b_dev_t* ws2812b, uint8_t red, uint8_t green, uint8_t blue) {
+esp_err_t ws2812b_fill(ws2812b_dev_t* ws2812b, grb8_t color) {
     // 1. Validation
     ESP_RETURN_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, TAG, "Handle is NULL");
 
-    // Defensive check: Ensure buffer was allocated
-    ESP_RETURN_ON_FALSE(ws2812b->buffer, ESP_ERR_INVALID_STATE, TAG, "Buffer is NULL");
-
     // 2. Optimization check
     // If all colors are 0 (turning off), memset is significantly faster than a loop
-    if(red == 0 && green == 0 && blue == 0) {
+    if(color.r == 0 && color.g == 0 && color.b == 0) {
         memset(ws2812b->buffer, 0, ws2812b->pixel_num * 3);
         return ESP_OK;
     }
@@ -193,9 +187,9 @@ esp_err_t ws2812b_fill(ws2812b_dev_t* ws2812b, uint8_t red, uint8_t green, uint8
     // Loop unrolling or pointer arithmetic could optimize this, but compiler usually handles it well.
     uint8_t* ptr = ws2812b->buffer;
     for(int i = 0; i < ws2812b->pixel_num; i++) {
-        *ptr++ = green;  // G
-        *ptr++ = red;    // R
-        *ptr++ = blue;   // B
+        *ptr++ = color.g;  // G
+        *ptr++ = color.r;  // R
+        *ptr++ = color.b;  // B
     }
 
     return ESP_OK;
@@ -204,27 +198,26 @@ esp_err_t ws2812b_fill(ws2812b_dev_t* ws2812b, uint8_t red, uint8_t green, uint8
 esp_err_t ws2812b_print_buffer(ws2812b_dev_t* ws2812b) {
     // 1. Validation
     ESP_RETURN_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, TAG, "Handle is NULL");
-    ESP_RETURN_ON_FALSE(ws2812b->buffer, ESP_ERR_INVALID_STATE, TAG, "Buffer is NULL");
 
     // 2. Log Header
-    ESP_LOGI(TAG, "Dumping Buffer (%d pixels, GRB format):", ws2812b->pixel_num);
+    ESP_LOGD(TAG, "Dumping Buffer (%d pixels, GRB format):", ws2812b->pixel_num);
 
     // 3. Hex Dump
     // ESP-IDF built-in function.
     // It prints the memory address offset and data in a readable 16-byte-per-line format.
     // LOG_LEVEL_INFO ensures it only prints if the log level is appropriate.
-    ESP_LOG_BUFFER_HEXDUMP(TAG, ws2812b->buffer, ws2812b->pixel_num * 3, ESP_LOG_INFO);
+    ESP_LOG_BUFFER_HEXDUMP(TAG, ws2812b->buffer, ws2812b->pixel_num * 3, ESP_LOG_DEBUG);
 
     return ESP_OK;
 }
 
-esp_err_t ws2812b_get_pixel(ws2812b_dev_t* ws2812b, int pixel_idx, uint8_t* red, uint8_t* green, uint8_t* blue) {
-    if(!ws2812b || pixel_idx < 0 || pixel_idx >= ws2812b->pixel_num) {
+esp_err_t ws2812b_get_pixel(ws2812b_dev_t* ws2812b, int pixel_idx, grb8_t* out_color) {
+    if(!ws2812b || !out_color || pixel_idx < 0 || pixel_idx >= ws2812b->pixel_num) {
         return ESP_ERR_INVALID_ARG;
     }
     // GRB mapping
-    *green = ws2812b->buffer[pixel_idx * 3 + 0];
-    *red = ws2812b->buffer[pixel_idx * 3 + 1];
-    *blue = ws2812b->buffer[pixel_idx * 3 + 2];
+    out_color->g = ws2812b->buffer[pixel_idx * 3 + 0];
+    out_color->r = ws2812b->buffer[pixel_idx * 3 + 1];
+    out_color->b = ws2812b->buffer[pixel_idx * 3 + 2];
     return ESP_OK;
 }

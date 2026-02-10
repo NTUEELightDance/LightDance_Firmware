@@ -1,9 +1,12 @@
 #pragma once
 
+#include <stdbool.h>
+
 #include "driver/i2c_master.h"
 
 #include "ld_board.h"
 #include "ld_config.h"
+#include "ld_led_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,22 +31,20 @@ typedef struct {
     bool need_reset_IREF; /*!< Set true if IREF register needs to be reinitialized */
 } pca9955b_dev_t;
 
+/* Bus lifecycle */
 esp_err_t i2c_bus_init(gpio_num_t i2c_gpio_sda, gpio_num_t i2c_gpio_scl, i2c_master_bus_handle_t* ret_i2c_bus_handle);
 
+/* Device lifecycle */
 esp_err_t pca9955b_init(pca9955b_dev_t* pca9955b, uint8_t i2c_addr, i2c_master_bus_handle_t i2c_bus_handle);
-
-esp_err_t pca9955b_set_pixel(pca9955b_dev_t* pca9955b, uint8_t pixel_idx, uint8_t red, uint8_t green, uint8_t blue);
-
-esp_err_t pca9955b_show(pca9955b_dev_t* pca9955b);
-
 esp_err_t pca9955b_del(pca9955b_dev_t* pca9955b);
 
-esp_err_t pca9955b_write(pca9955b_dev_t* pca9955b, const uint8_t* buffer);
+/* Buffer update */
+esp_err_t pca9955b_set_pixel(pca9955b_dev_t* pca9955b, uint8_t pixel_idx, grb8_t color);
+esp_err_t pca9955b_write_grb(pca9955b_dev_t* pca9955b, const grb8_t* colors, uint8_t count);
+esp_err_t pca9955b_fill(pca9955b_dev_t* pca9955b, grb8_t color);
 
-esp_err_t pca9955b_fill(pca9955b_dev_t* pca9955b, uint8_t red, uint8_t green, uint8_t blue);
-
-void pca9955b_test1();
-void pca9955b_test2();
+/* Transmission */
+esp_err_t pca9955b_show(pca9955b_dev_t* pca9955b);
 
 #ifdef __cplusplus
 }

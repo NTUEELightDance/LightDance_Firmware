@@ -30,5 +30,6 @@
 
 /* Behavior controls */
 #define LD_CFG_IGNORE_DRIVER_INIT_FAIL 1
+#define LD_CFG_SHOW_TIME_PER_FRAME 0
 
 #define LD_CFG_ENABLE_INTERNAL_PULLUP 1

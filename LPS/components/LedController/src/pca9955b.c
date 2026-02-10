@@ -13,6 +13,12 @@ static const char* TAG = "PCA9955B";
 
 uint8_t IREF_cmd[2] = {PCA9955B_IREFALL_ADDR, 0xff}; /*!< 2-byte IREF reset command to send over I2C */
 
+static inline void pca9955b_store_grb_as_rgb(pca9955b_dev_t* pca9955b, uint8_t pixel_idx, grb8_t color) {
+    pca9955b->buffer.ch[pixel_idx][0] = color.r; /*!< Red channel */
+    pca9955b->buffer.ch[pixel_idx][1] = color.g; /*!< Green channel */
+    pca9955b->buffer.ch[pixel_idx][2] = color.b; /*!< Blue channel */
+}
+
 esp_err_t i2c_bus_init(gpio_num_t i2c_gpio_sda, gpio_num_t i2c_gpio_scl, i2c_master_bus_handle_t* ret_i2c_bus_handle) {
     esp_err_t ret = ESP_OK;
 
@@ -26,11 +32,11 @@ esp_err_t i2c_bus_init(gpio_num_t i2c_gpio_sda, gpio_num_t i2c_gpio_scl, i2c_mas
 
     // 2. Configuration
     i2c_master_bus_config_t i2c_bus_config = {
-        .i2c_port = I2C_NUM_0,                                     /*!< Use I2C port 0 */
-        .sda_io_num = i2c_gpio_sda,                                /*!< SDA GPIO pin */
-        .scl_io_num = i2c_gpio_scl,                                /*!< SCL GPIO pin */
-        .clk_source = I2C_CLK_SRC_DEFAULT,                         /*!< Select default clock source */
-        .glitch_ignore_cnt = 7,                                    /*!< Glitch filter (typical value) */
+        .i2c_port = I2C_NUM_0,                                         /*!< Use I2C port 0 */
+        .sda_io_num = i2c_gpio_sda,                                    /*!< SDA GPIO pin */
+        .scl_io_num = i2c_gpio_scl,                                    /*!< SCL GPIO pin */
+        .clk_source = I2C_CLK_SRC_DEFAULT,                             /*!< Select default clock source */
+        .glitch_ignore_cnt = LD_BOARD_I2C_GLITCH_IGNORE_CNT,           /*!< Glitch filter */
         .flags.enable_internal_pullup = LD_CFG_ENABLE_INTERNAL_PULLUP, /*!< Enable internal weak pull-ups */
     };
 
@@ -92,28 +98,27 @@ err:
     return ret;
 }
 
-esp_err_t pca9955b_set_pixel(pca9955b_dev_t* pca9955b, uint8_t pixel_idx, uint8_t red, uint8_t green, uint8_t blue) {
+esp_err_t pca9955b_set_pixel(pca9955b_dev_t* pca9955b, uint8_t pixel_idx, grb8_t color) {
     // 1. Validate Input
     ESP_RETURN_ON_FALSE(pca9955b, ESP_ERR_INVALID_ARG, TAG, "Handle is NULL");
-    ESP_RETURN_ON_FALSE(pixel_idx < 5, ESP_ERR_INVALID_ARG, TAG, "Pixel index out of range (0-4)");
+    ESP_RETURN_ON_FALSE(pixel_idx < LD_BOARD_PCA9955B_RGB_PER_IC, ESP_ERR_INVALID_ARG, TAG, "Pixel index out of range (0-%d)", LD_BOARD_PCA9955B_RGB_PER_IC - 1);
 
-    // 2. Write to Shadow Buffer
-    // Assuming RGB order. Adjust indices if your hardware is GRB.
-    pca9955b->buffer.ch[pixel_idx][0] = red;   /*!< Red channel */
-    pca9955b->buffer.ch[pixel_idx][1] = green; /*!< Green channel */
-    pca9955b->buffer.ch[pixel_idx][2] = blue;  /*!< Blue channel */
+    // 2. Convert public GRB color into internal RGB buffer layout.
+    pca9955b_store_grb_as_rgb(pca9955b, pixel_idx, color);
 
     return ESP_OK;
 }
 
-esp_err_t pca9955b_write(pca9955b_dev_t* pca9955b, const uint8_t* _buffer) {
+esp_err_t pca9955b_write_grb(pca9955b_dev_t* pca9955b, const grb8_t* colors, uint8_t count) {
     // 1. Validate Input
     ESP_RETURN_ON_FALSE(pca9955b, ESP_ERR_INVALID_ARG, TAG, "Handle is NULL");
-    ESP_RETURN_ON_FALSE(_buffer, ESP_ERR_INVALID_ARG, TAG, "Input buffer is NULL");
+    ESP_RETURN_ON_FALSE(colors, ESP_ERR_INVALID_ARG, TAG, "Input buffer is NULL");
+    ESP_RETURN_ON_FALSE(count <= LD_BOARD_PCA9955B_RGB_PER_IC, ESP_ERR_INVALID_ARG, TAG, "count out of range (max=%d)", LD_BOARD_PCA9955B_RGB_PER_IC);
 
-    // 2. Bulk Copy Logic
-    // Copy 15 bytes (5 RGB LEDs x 3 colors) directly into the shadow buffer
-    memcpy(pca9955b->buffer.data, _buffer, 15 * sizeof(uint8_t));
+    // 2. Bulk convert GRB input into internal RGB shadow buffer.
+    for(uint8_t i = 0; i < count; ++i) {
+        pca9955b_store_grb_as_rgb(pca9955b, i, colors[i]);
+    }
 
     return ESP_OK;
 }
@@ -130,7 +135,7 @@ esp_err_t pca9955b_show(pca9955b_dev_t* pca9955b) {
 
         if(ret == ESP_OK) {
             pca9955b->need_reset_IREF = false; /*!< IREF reset completed */
-            ESP_LOGI(TAG, "PCA9955B IREF recovered");
+            ESP_LOGD(TAG, "PCA9955B IREF recovered");
         } else {
             // If IREF fails, we can't show colors properly anyway.
             ESP_LOGW(TAG, "Failed to restore IREF: %s", esp_err_to_name(ret));
@@ -184,15 +189,13 @@ esp_err_t pca9955b_del(pca9955b_dev_t* pca9955b) {
     return ESP_OK;
 }
 
-esp_err_t pca9955b_fill(pca9955b_dev_t* pca9955b, uint8_t red, uint8_t green, uint8_t blue) {
+esp_err_t pca9955b_fill(pca9955b_dev_t* pca9955b, grb8_t color) {
     // 1. Input Validation
     ESP_RETURN_ON_FALSE(pca9955b, ESP_ERR_INVALID_ARG, TAG, "Handle is NULL");
 
-    // 2. Loop through all 5 LEDs and set color
-    for(int i = 0; i < 5; i++) {
-        pca9955b->buffer.ch[i][0] = red;
-        pca9955b->buffer.ch[i][1] = green;
-        pca9955b->buffer.ch[i][2] = blue;
+    // 2. Loop through all 5 logical LEDs and set the same color.
+    for(uint8_t i = 0; i < LD_BOARD_PCA9955B_RGB_PER_IC; ++i) {
+        pca9955b_store_grb_as_rgb(pca9955b, i, color);
     }
 
     return ESP_OK;
