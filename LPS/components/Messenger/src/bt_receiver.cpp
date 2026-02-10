@@ -1,6 +1,5 @@
 /*
  * bt_receiver.cpp
- * [Type(1)][ID(2)][CMD_ID+CMD(1)][Mask(8)][Delay(4)][Prep(4)][Data(3)] = Total 23 bytes
  */
 
 #include "bt_receiver.h"
@@ -30,6 +29,7 @@
 #define HCIC_PARAM_SIZE_SET_EVENT_MASK (8)
 #define HCIC_PARAM_SIZE_BLE_WRITE_SCAN_PARAM (7)
 #define HCIC_PARAM_SIZE_BLE_WRITE_SCAN_ENABLE (2)
+#define CMD_TYPE_ACK 0x08
 
 #define UINT16_TO_STREAM(p, u16)        \
     {                                   \
@@ -70,14 +70,17 @@ typedef struct {
     bt_action_context_t ctx;
 } action_slot_t;
 
-// --- Timer Slots Pool ---
 static action_slot_t s_slots[MAX_CONCURRENT_ACTIONS];
-
+static struct {
+    uint8_t cmd_id;
+    uint8_t cmd_type;
+    uint32_t original_delay;
+    int64_t lock_timestamp;
+} s_last_locked_cmd = {0, 0, 0, 0};
 // ==========================================
-// Part 1: HCI Helper Functions (Private)
+// Part 1: HCI Helper Functions
 // ==========================================
 
-// --- HCI Command Builders ---
 static uint16_t make_cmd_reset(uint8_t* buf) {
     UINT8_TO_STREAM(buf, H4_TYPE_COMMAND);
     UINT16_TO_STREAM(buf, HCI_RESET);
@@ -85,7 +88,6 @@ static uint16_t make_cmd_reset(uint8_t* buf) {
     return HCI_H4_CMD_PREAMBLE_SIZE;
 }
 
-// --- Set Event Mask to receive LE Meta Events ---
 static uint16_t make_cmd_set_evt_mask(uint8_t* buf, uint8_t* evt_mask) {
     UINT8_TO_STREAM(buf, H4_TYPE_COMMAND);
     UINT16_TO_STREAM(buf, HCI_SET_EVT_MASK);
@@ -94,7 +96,6 @@ static uint16_t make_cmd_set_evt_mask(uint8_t* buf, uint8_t* evt_mask) {
     return HCI_H4_CMD_PREAMBLE_SIZE + HCIC_PARAM_SIZE_SET_EVENT_MASK;
 }
 
-// --- Set BLE Scan Parameters ---
 static uint16_t make_cmd_ble_set_scan_params(uint8_t* buf,
                                              uint8_t scan_type,
                                              uint16_t scan_interval,
@@ -112,7 +113,6 @@ static uint16_t make_cmd_ble_set_scan_params(uint8_t* buf,
     return HCI_H4_CMD_PREAMBLE_SIZE + HCIC_PARAM_SIZE_BLE_WRITE_SCAN_PARAM;
 }
 
-// --- Set BLE Scan Enable ---
 static uint16_t make_cmd_ble_set_scan_enable(uint8_t* buf, uint8_t scan_enable, uint8_t filter_duplicates) {
     UINT8_TO_STREAM(buf, H4_TYPE_COMMAND);
     UINT16_TO_STREAM(buf, HCI_BLE_WRITE_SCAN_ENABLE);
@@ -122,22 +122,130 @@ static uint16_t make_cmd_ble_set_scan_enable(uint8_t* buf, uint8_t scan_enable, 
     return HCI_H4_CMD_PREAMBLE_SIZE + HCIC_PARAM_SIZE_BLE_WRITE_SCAN_ENABLE;
 }
 
-// ==========================================
-// Part 2: Fast RX Driver & ISR
-// ==========================================
+static uint16_t make_cmd_ble_set_adv_data(uint8_t *buf, uint8_t data_len, uint8_t *p_data) {
+    UINT8_TO_STREAM(buf, H4_TYPE_COMMAND);
+    UINT16_TO_STREAM(buf, 0x2008); // HCI_BLE_WRITE_ADV_DATA
+    UINT8_TO_STREAM(buf, 32);      // HCI Param Length (Fixed 32)
+    UINT8_TO_STREAM(buf, data_len); // Adv Data Length
+    ARRAY_TO_STREAM(buf, p_data, data_len);
+    uint8_t pad_len = 31 - data_len;
+    for (int i = 0; i < pad_len; i++) {
+        UINT8_TO_STREAM(buf, 0);
+    }
+    return HCI_H4_CMD_PREAMBLE_SIZE + 1 + 31;
+}
 
-// --- Fast Parse and Trigger Function (Called from ISR) ---
+static void hci_cmd_send_ble_adv_enable(uint8_t enable) {
+    uint8_t buf[128];
+    uint8_t *p = buf;
+    UINT8_TO_STREAM(p, H4_TYPE_COMMAND);
+    UINT16_TO_STREAM(p, 0x200A); // HCI_BLE_WRITE_ADV_ENABLE
+    UINT8_TO_STREAM(p, 1);
+    UINT8_TO_STREAM(p, enable);
+    esp_vhci_host_send_packet(buf, p - buf);
+}
+
+static void hci_cmd_send_ble_set_adv_param_ack(void) {
+    uint8_t buf[128];
+    uint8_t *p = buf;
+    // Standard Interval: 200ms (320 * 0.625)
+    uint16_t interval = 48; 
+    
+    UINT8_TO_STREAM(p, H4_TYPE_COMMAND);
+    UINT16_TO_STREAM(p, 0x2006); // HCI_BLE_WRITE_ADV_PARAMS
+    UINT8_TO_STREAM(p, 15);
+    UINT16_TO_STREAM(p, interval); // Min
+    UINT16_TO_STREAM(p, interval); // Max
+    
+    // Use ADV_IND (Type 0)
+    UINT8_TO_STREAM(p, 0); 
+    
+    UINT8_TO_STREAM(p, 0); // Own addr type
+    UINT8_TO_STREAM(p, 0); // Peer addr type
+    UINT8_TO_STREAM(p, 0); UINT8_TO_STREAM(p, 0); UINT8_TO_STREAM(p, 0); UINT8_TO_STREAM(p, 0); UINT8_TO_STREAM(p, 0); UINT8_TO_STREAM(p, 0); 
+    UINT8_TO_STREAM(p, 0x07); // Channel Map
+    UINT8_TO_STREAM(p, 0); // Filter Policy
+    
+    esp_vhci_host_send_packet(buf, p - buf);
+}
+
+typedef struct {
+    uint8_t my_id;
+    uint8_t cmd_id;
+    uint8_t cmd_type;
+    uint32_t delay_val;
+    uint8_t state;
+} ack_task_params_t;
+
+static void send_ack_task(void *arg) {
+    ack_task_params_t *params = (ack_task_params_t *)arg;
+    
+    // Stop Scanning First, Release RF for TX.
+    uint8_t scan_buf[32];
+    make_cmd_ble_set_scan_enable(scan_buf, 0, 0); // Disable Scan
+    esp_vhci_host_send_packet(scan_buf, 6);
+    esp_rom_delay_us(5000);
+
+    ESP_LOGD(TAG, ">>> ACK START: ID=%d, CMD=%d (Scan Stopped)", params->my_id, params->cmd_id);
+
+    // Set Params
+    hci_cmd_send_ble_set_adv_param_ack();
+    vTaskDelay(pdMS_TO_TICKS(20));
+    
+    // Build Data
+    uint8_t raw_data[31];
+    uint8_t idx = 0;
+    
+    raw_data[idx++] = 2; raw_data[idx++] = 0x01; raw_data[idx++] = 0x06;
+    
+    // Length = 12
+    raw_data[idx++] = 12; 
+    raw_data[idx++] = 0xFF; raw_data[idx++] = 0xFF; raw_data[idx++] = 0xFF; // Type + ID
+    raw_data[idx++] = CMD_TYPE_ACK; // 0x08
+    
+    raw_data[idx++] = params->my_id;
+    raw_data[idx++] = params->cmd_id;
+    raw_data[idx++] = params->cmd_type;
+    
+    raw_data[idx++] = (params->delay_val >> 24) & 0xFF;
+    raw_data[idx++] = (params->delay_val >> 16) & 0xFF;
+    raw_data[idx++] = (params->delay_val >> 8) & 0xFF;
+    raw_data[idx++] = (params->delay_val) & 0xFF;
+
+    raw_data[idx++] = params->state;
+    
+    uint8_t hci_buf[128];
+    uint16_t pkt_len = make_cmd_ble_set_adv_data(hci_buf, idx, raw_data);
+    esp_vhci_host_send_packet(hci_buf, pkt_len);
+    vTaskDelay(pdMS_TO_TICKS(20));
+
+    // Start Adv
+    hci_cmd_send_ble_adv_enable(1);
+    //origin: 50
+    vTaskDelay(pdMS_TO_TICKS(100));
+    
+    // Stop Adv
+    hci_cmd_send_ble_adv_enable(0);
+    ESP_LOGD(TAG, ">>> ACK STOPPED. Resuming Scan.");
+
+    // Resume Scanning
+    make_cmd_ble_set_scan_enable(scan_buf, 1, 0);
+    esp_vhci_host_send_packet(scan_buf, 6);
+
+    free(params);
+    vTaskDelete(NULL);
+}
+
+// ==========================================
+// Part 2: Fast RX Driver & ISR (Unchanged)
+// ==========================================
 static void IRAM_ATTR fast_parse_and_trigger(uint8_t* data, uint16_t len) {
     int64_t now_us = esp_timer_get_time();
-
-    // --- Check Header: Event(0x04) -> LE Meta(0x3E) -> Adv Report(0x02) ---
-    if(data[0] != 0x04 || data[1] != 0x3E || data[3] != 0x02)
-        return;
+    if(data[0] != 0x04 || data[1] != 0x3E || data[3] != 0x02) return;
 
     uint8_t num_reports = data[4];
     uint8_t* payload = &data[5];
 
-    // --- Parse Each Report ---
     for(int i = 0; i < num_reports; i++) {
         uint8_t data_len = payload[8];
         uint8_t* adv_data = &payload[9];
@@ -146,56 +254,27 @@ static void IRAM_ATTR fast_parse_and_trigger(uint8_t* data, uint16_t len) {
         uint8_t offset = 0;
         while(offset < data_len) {
             uint8_t ad_len = adv_data[offset++];
-            if(ad_len == 0)
-                break;
+            if(ad_len == 0) break;
             uint8_t ad_type = adv_data[offset++];
 
-            // --- Check Manufacturer Specific Data (Type 0xFF) ---
             if(ad_type == 0xFF && ad_len >= 16) {
                 uint16_t target_id = s_config.manufacturer_id;
-
-                // --- Check Target ID ---
                 if(adv_data[offset] == (target_id & 0xFF) && adv_data[offset + 1] == ((target_id >> 8) & 0xFF)) {
-
-                    // --- Extract Target Mask (Offset 3~10) ---
                     uint64_t rcv_mask = 0;
-                    for(int k = 0; k < 8; k++) {
-                        rcv_mask |= ((uint64_t)adv_data[offset + 3 + k] << (k * 8));
-                    }
+                    for(int k = 0; k < 8; k++) rcv_mask |= ((uint64_t)adv_data[offset + 3 + k] << (k * 8));
 
-                    // --- Check if this receiver is a target ---
                     bool is_target = true;
                     if(s_config.my_player_id >= 0) {
-                        // --- Check Target Mask against my_player_id ---
-                        if(!((rcv_mask >> s_config.my_player_id) & 1ULL)) {
-                            is_target = false;
-                        }
+                        if(!((rcv_mask >> s_config.my_player_id) & 1ULL)) is_target = false;
                     }
 
                     if(is_target) {
-                        // Hardware Trigger (GPIO Debug)
-                        // if (s_config.feedback_gpio_num >= 0) {
-                        //     gpio_set_level((gpio_num_t)s_config.feedback_gpio_num, 1);
-                        //     esp_rom_delay_us(1);
-                        //     gpio_set_level((gpio_num_t)s_config.feedback_gpio_num, 0);
-                        // }
-
-                        // --- Parse Command ID and Command (Offset 2) ---
                         uint8_t rcv_cmd_id = (adv_data[offset + 2] >> 4) & 0x0F;
                         uint8_t rcv_cmd = adv_data[offset + 2] & 0x0F;
-
-                        // --- Parse Delay (Offset 11 ~ 14) - Big Endian ---
-                        uint32_t rcv_delay =
-                            (adv_data[offset + 11] << 24) | (adv_data[offset + 12] << 16) | (adv_data[offset + 13] << 8) | (adv_data[offset + 14]);
-
-                        // --- Parse Prep Time (Offset 15 ~ 18) - Big Endian ---
-                        uint32_t rcv_prep_time =
-                            (adv_data[offset + 15] << 24) | (adv_data[offset + 16] << 16) | (adv_data[offset + 17] << 8) | (adv_data[offset + 18]);
-
-                        // --- Parse Data (Offset 19 ~ 21) ---
+                        uint32_t rcv_delay = (adv_data[offset + 11] << 24) | (adv_data[offset + 12] << 16) | (adv_data[offset + 13] << 8) | (adv_data[offset + 14]);
+                        uint32_t rcv_prep_time = (adv_data[offset + 15] << 24) | (adv_data[offset + 16] << 16) | (adv_data[offset + 17] << 8) | (adv_data[offset + 18]);
                         uint8_t rcv_data[3] = {adv_data[offset + 19], adv_data[offset + 20], adv_data[offset + 21]};
 
-                        // --- Prepare Packet ---
                         ble_rx_packet_t pkt;
                         pkt.cmd_id = rcv_cmd_id;
                         pkt.cmd_type = rcv_cmd;
@@ -208,14 +287,9 @@ static void IRAM_ATTR fast_parse_and_trigger(uint8_t* data, uint16_t len) {
                         pkt.rssi = rssi;
                         pkt.rx_time_us = now_us;
 
-                        // --- Send to Queue (From ISR) ---
                         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
                         xQueueSendFromISR(s_adv_queue, &pkt, &xHigherPriorityTaskWoken);
-
-                        if(xHigherPriorityTaskWoken) {
-                            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-                        }
-
+                        if(xHigherPriorityTaskWoken) portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
                         return;
                     }
                 }
@@ -226,27 +300,29 @@ static void IRAM_ATTR fast_parse_and_trigger(uint8_t* data, uint16_t len) {
     }
 }
 
-// --- VHCI Callbacks ---
 static int host_rcv_pkt(uint8_t* data, uint16_t len) {
     fast_parse_and_trigger(data, len);
     return ESP_OK;
 }
 static void controller_rcv_pkt_ready(void) {}
 static esp_vhci_host_callback_t vhci_host_cb = {controller_rcv_pkt_ready, host_rcv_pkt};
-
-// ==========================================
-// Part 3: Sync Logic & Timer
-// ==========================================
-
-// --- Timer Timeout Callback ---
+static void trigger_ack_task(uint8_t my_id, uint8_t cmd_id, uint8_t cmd_type, uint32_t delay_val, uint8_t state) {
+    ack_task_params_t *params = (ack_task_params_t *)malloc(sizeof(ack_task_params_t));
+    if (params) {
+        params->my_id = my_id;
+        params->cmd_id = cmd_id;
+        params->cmd_type = cmd_type;
+        params->delay_val = delay_val;
+        params->state = state;
+        xTaskCreate(send_ack_task, "ack_task", 4096, params, 5, NULL);
+    }
+}
 static void IRAM_ATTR timer_timeout_cb(void* arg) {
     action_slot_t* slot = (action_slot_t*)arg;
-
-    // --- Call Player API based on slot context ---
     uint8_t cmd = slot->ctx.target_cmd;
     uint8_t test_data[3];
     memcpy(test_data, (const uint8_t*)slot->ctx.data, 3);
-
+    ESP_LOGD(TAG,">> [ACTION TRIGGERED] CMD: 0x%02X\n", cmd);
     switch(cmd) {
         case 0x01:
             Player::getInstance().play();
@@ -260,16 +336,30 @@ static void IRAM_ATTR timer_timeout_cb(void* arg) {
         case 0x04:
             Player::getInstance().release();
             break;
-        // case 0x05:
-        //     Player::getInstance().load();
-        //     break;
-        case 0x06:
-            Player::getInstance().test(test_data[0], test_data[1], test_data[2]);
+        case 0x05:
+            if (test_data[0] == 0 && test_data[1] == 0 && test_data[2] == 0) {
+                Player::getInstance().test();
+            } else {
+                Player::getInstance().test(test_data[0], test_data[1], test_data[2]);
+            }
             break;
-        // --- Cancel Command ---
-        case 0x07: {
+        case 0x06:
             esp_timer_stop(s_slots[test_data[0]].timer_handle);
-            ESP_LOGI(TAG, "CMD 0x%02X Canceled! CMD_ID = %d", s_slots[test_data[0]].ctx.target_cmd, test_data[0]);
+            ESP_LOGD(TAG, "CMD 0x%02X Canceled! CMD_ID = %d", s_slots[test_data[0]].ctx.target_cmd, test_data[0]);
+            break;
+        case 0x07:{
+            int8_t state = Player::getInstance().getState();
+            int64_t now = esp_timer_get_time();
+            int64_t target_time = s_last_locked_cmd.lock_timestamp + s_last_locked_cmd.original_delay;
+            int32_t remaining_us = (int32_t)(target_time - now);
+            if (remaining_us < 0) remaining_us = 0;
+            // Safety Delay
+            vTaskDelay(pdMS_TO_TICKS(150));
+            trigger_ack_task(s_config.my_player_id, 
+                             s_last_locked_cmd.cmd_id, 
+                             s_last_locked_cmd.cmd_type, 
+                             (uint32_t)remaining_us,
+                             state);
             break;
         }
         default:
@@ -278,7 +368,6 @@ static void IRAM_ATTR timer_timeout_cb(void* arg) {
 }
 
 static void sync_process_task(void* arg) {
-    // --- Variables for Processing ---
     ble_rx_packet_t pkt;
     int last_processed_id = -1;
     uint8_t current_cmd_id = 0;
@@ -294,14 +383,11 @@ static void sync_process_task(void* arg) {
     ESP_LOGI(TAG, "Sync Task Running...");
 
     while(s_is_running) {
-        // --- Receive Packets ---
         if(xQueueReceive(s_adv_queue, &pkt, pdMS_TO_TICKS(10)) == pdTRUE) {
             int64_t now = esp_timer_get_time();
-            if(pkt.cmd_id == last_processed_id) {
-                continue;
-            }
-            // --- New Command ID, Reset Collection ---
-            if(!collecting || pkt.cmd_id != current_cmd_id) {
+            if(pkt.cmd_id == last_processed_id) continue;
+
+            if(!collecting) {
                 collecting = true;
                 current_cmd_id = pkt.cmd_id;
                 current_cmd = pkt.cmd_type;
@@ -314,74 +400,70 @@ static void sync_process_task(void* arg) {
                 window_start_time = now;
                 window_expired = false;
             }
-
-            // --- Collect Samples within Sync Window ---
-            if(collecting && !window_expired) {
-                if(now < (window_start_time + s_config.sync_window_us)) {
-                    sum_target += (pkt.rx_time_us + pkt.delay_val);
-                    count++;
+            else{
+                if (pkt.cmd_id == current_cmd_id) {
+                    if(now < (window_start_time + s_config.sync_window_us)) {
+                        sum_target += (pkt.rx_time_us + pkt.delay_val);
+                        count++;
+                    }
                 } else {
                     window_expired = true;
                     if(count > 0) {
                         int64_t final_target = sum_target / count;
                         int64_t wait_us = final_target - now;
-
-                        // --- Assign to Timer Slot ---
                         if(wait_us > 500) {
                             action_slot_t* target_slot = &s_slots[current_cmd_id];
                             target_slot->ctx.target_cmd = current_cmd;
                             target_slot->ctx.target_mask = current_mask;
                             memcpy((void*)target_slot->ctx.data, current_data, 3);
-
                             esp_timer_stop(target_slot->timer_handle);
                             esp_timer_start_once(target_slot->timer_handle, wait_us);
                             last_processed_id = current_cmd_id;
-
-                            ESP_LOGI(
-                                TAG, "CMD 0x%02X Locked! Slot %d Used. Delay: %lld us (samples: %d)", current_cmd, current_cmd_id, wait_us, count);
-                        } else {
-                            ESP_LOGW(TAG, "CMD 0x%02X Missed! Latency too high.", current_cmd);
+                            if (current_cmd != 0x08) {
+                                s_last_locked_cmd.cmd_id = current_cmd_id;
+                                s_last_locked_cmd.cmd_type = current_cmd;
+                                s_last_locked_cmd.original_delay = (uint32_t)wait_us;
+                                s_last_locked_cmd.lock_timestamp = esp_timer_get_time();
+                            }
+                            ESP_LOGD(TAG, "CMD 0x%02X Locked! Delay: %lld us", current_cmd, wait_us);
+                            // trigger_ack_task(s_config.my_player_id, current_cmd_id, current_cmd, (uint32_t)wait_us);
                         }
                     }
-
-                    collecting = false;
+                    collecting = true;
+                    current_cmd_id = pkt.cmd_id;
+                    current_cmd = pkt.cmd_type;
+                    current_mask = pkt.target_mask;
+                    current_data[0] = pkt.data[0];
+                    current_data[1] = pkt.data[1];
+                    current_data[2] = pkt.data[2];
+                    window_start_time = now;
+                    window_expired = false;
+                    sum_target = (pkt.rx_time_us + pkt.delay_val);
+                    count = 1;
                 }
             }
         }
-
-        // --- Check Sync Window Expiry ---
         if(collecting && !window_expired) {
             int64_t now = esp_timer_get_time();
             if(now >= (window_start_time + s_config.sync_window_us)) {
                 window_expired = true;
-
                 if(count > 0) {
-                    int64_t final_target = sum_target / count;
-                    int64_t wait_us = final_target - now;
-
-                    if(wait_us > 500) {
-                        action_slot_t* target_slot = &s_slots[current_cmd_id];
-
-                        if(target_slot != NULL) {
-                            // --- Assign Context ---
-                            target_slot->ctx.target_cmd = current_cmd;
-                            target_slot->ctx.target_mask = current_mask;
-                            target_slot->ctx.data[0] = current_data[0];
-                            target_slot->ctx.data[1] = current_data[1];
-                            target_slot->ctx.data[2] = current_data[2];
-                            // --- Start Timer ---
-                            esp_timer_stop(target_slot->timer_handle);
-                            esp_timer_start_once(target_slot->timer_handle, wait_us);
-                            last_processed_id = current_cmd_id;
-
-                            ESP_LOGI(TAG, "CMD 0x%02X Locked! Slot %d Used. Delay: %lld us", current_cmd, current_cmd_id, wait_us);
-                        } else {
-                            ESP_LOGE(TAG, "No free slots for CMD 0x%02X!", current_cmd);
-                        }
-
-                    } else {
-                        ESP_LOGW(TAG, "CMD 0x%02X Missed! Latency too high.", current_cmd);
-                    }
+                     int64_t final_target = sum_target / count;
+                     int64_t wait_us = final_target - now;
+                     if(wait_us > 500) {
+                         action_slot_t* target_slot = &s_slots[current_cmd_id];
+                         if(target_slot != NULL) {
+                             target_slot->ctx.target_cmd = current_cmd;
+                             target_slot->ctx.target_mask = current_mask;
+                             memcpy((void*)target_slot->ctx.data, current_data, 3);
+                             esp_timer_stop(target_slot->timer_handle);
+                             esp_timer_start_once(target_slot->timer_handle, wait_us);
+                             last_processed_id = current_cmd_id;
+                             
+                             ESP_LOGD(TAG, "CMD 0x%02X Locked (Timeout)! Delay: %lld us", current_cmd, wait_us);
+                            //  trigger_ack_task(s_config.my_player_id, current_cmd_id, current_cmd, (uint32_t)wait_us);
+                         }
+                     }
                 }
                 collecting = false;
             }
@@ -390,96 +472,55 @@ static void sync_process_task(void* arg) {
     vTaskDelete(NULL);
 }
 
-// ==========================================
-// Part 4: Public APIs
-// ==========================================
-
-// --- Initialize BT Receiver ---
 esp_err_t bt_receiver_init(const bt_receiver_config_t* config) {
-    if(!config)
-        return ESP_ERR_INVALID_ARG;
+    if(!config) return ESP_ERR_INVALID_ARG;
     s_config = *config;
-
-    // 1. Create Queue
     s_adv_queue = xQueueCreate(s_config.queue_size, sizeof(ble_rx_packet_t));
-    if(!s_adv_queue)
-        return ESP_ERR_NO_MEM;
-
-    // 2. Setup GPIO (if used)
-    // if (s_config.feedback_gpio_num >= 0) {
-    //     gpio_config_t io_conf = {
-    //         .pin_bit_mask = (1ULL << s_config.feedback_gpio_num),
-    //         .mode = GPIO_MODE_OUTPUT,
-    //         .pull_down_en = 0, .pull_up_en = 0, .intr_type = GPIO_INTR_DISABLE
-    //     };
-    //     gpio_config(&io_conf);
-    //     gpio_set_level(s_config.feedback_gpio_num, 0);
-    // }
-
-    // 2. Create Timers
-    esp_timer_create_args_t timer_args = {.callback = &timer_timeout_cb, .name = "bt_slot_tmr"};
-
+    if(!s_adv_queue) return ESP_ERR_NO_MEM;
+    esp_timer_create_args_t timer_args = {
+        .callback = &timer_timeout_cb,
+        .arg = NULL,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "bt_slot_tmr",
+        .skip_unhandled_events = false
+    };
     for(int i = 0; i < MAX_CONCURRENT_ACTIONS; i++) {
         timer_args.arg = (void*)&s_slots[i];
         esp_timer_create(&timer_args, &s_slots[i].timer_handle);
     }
-
-    // 3. Init BT Controller
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     esp_bt_controller_init(&bt_cfg);
     esp_bt_controller_enable(ESP_BT_MODE_BLE);
     esp_vhci_host_register_callback(&vhci_host_cb);
-
     return ESP_OK;
 }
 
-// --- Start BT Receiver ---
 esp_err_t bt_receiver_start(void) {
-    if(s_is_running)
-        return ESP_OK;
-
-    // --- Send HCI Commands ---
+    if(s_is_running) return ESP_OK;
     uint16_t sz = make_cmd_reset(hci_cmd_buf);
     esp_vhci_host_send_packet(hci_cmd_buf, sz);
     vTaskDelay(pdMS_TO_TICKS(20));
-
-    // --- Set Event Mask to receive LE Meta Events ---
     uint8_t mask[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20};
     sz = make_cmd_set_evt_mask(hci_cmd_buf, mask);
     esp_vhci_host_send_packet(hci_cmd_buf, sz);
     vTaskDelay(pdMS_TO_TICKS(20));
-
-    // --- Set Scan Parameters ---
     sz = make_cmd_ble_set_scan_params(hci_cmd_buf, 0x00, 0x0F, 0x0F, 0x00, 0x00);
     esp_vhci_host_send_packet(hci_cmd_buf, sz);
     vTaskDelay(pdMS_TO_TICKS(20));
-
-    // --- Enable Scanning ---
     sz = make_cmd_ble_set_scan_enable(hci_cmd_buf, 1, 0);
     esp_vhci_host_send_packet(hci_cmd_buf, sz);
-
-    // --- Start Sync Task ---
     s_is_running = true;
     xTaskCreatePinnedToCore(sync_process_task, "bt_rx_task", 4096, NULL, 5, &s_task_handle, 1);
-
     ESP_LOGI(TAG, "Receiver Started");
     return ESP_OK;
 }
 
-// --- Stop BT Receiver ---
 esp_err_t bt_receiver_stop(void) {
     s_is_running = false;
-
-    // Stop Scanning
     uint16_t sz = make_cmd_ble_set_scan_enable(hci_cmd_buf, 0, 0);
     esp_vhci_host_send_packet(hci_cmd_buf, sz);
-
-    // Stop All Timers
     for(int i = 0; i < MAX_CONCURRENT_ACTIONS; i++) {
-        if(s_slots[i].timer_handle) {
-            esp_timer_stop(s_slots[i].timer_handle);
-        }
+        if(s_slots[i].timer_handle) esp_timer_stop(s_slots[i].timer_handle);
     }
-
     return ESP_OK;
 }
