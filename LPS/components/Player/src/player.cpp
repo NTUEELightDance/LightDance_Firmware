@@ -99,7 +99,7 @@ esp_err_t Player::resetPlayback() {
     ESP_RETURN_ON_ERROR(clock.reset(), TAG, "Failed to reset clock");
     ESP_RETURN_ON_ERROR(fb.reset(), TAG, "Failed to reset framebuffer");
 
-    controller.fill(0, 0, 0);
+    controller.fill(GRB_BLACK);
     controller.show();
 
     return ESP_OK;
@@ -111,14 +111,7 @@ esp_err_t Player::updatePlayback() {
     fb.compute(time_ms);
 
     frame_data* buf = fb.get_buffer();
-
-    for(int i = 0; i < LD_BOARD_PCA9955B_CH_NUM; i++) {
-        controller.write_buffer(i, (uint8_t*)&buf->pca9955b[i]);
-    }
-
-    for(int i = 0; i < LD_BOARD_WS2812B_NUM; i++) {
-        controller.write_buffer(i + LD_BOARD_PCA9955B_CH_NUM, (uint8_t*)buf->ws2812b[i]);
-    }
+    controller.write_frame(buf);
 
     // print_frame_data(*buf);
 

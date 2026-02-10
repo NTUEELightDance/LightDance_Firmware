@@ -82,7 +82,7 @@ void compute(uint64_t time_ms);
 ### Data Access
 ```cpp
 // Returns a pointer to the computed/interpolated frame data.
-// Pass this pointer to LedController::write_buffer().
+// Pass this pointer to LedController::write_frame().
 frame_data* get_buffer();
 ```
 
@@ -115,13 +115,8 @@ void player_task(void *pvParameters) {
         // C. Send data to hardware
         frame_data* pixels = frameBuf.get_buffer();
         
-        // Push WS2812B data
-        for(int i=0; i<LD_BOARD_WS2812B_NUM; i++) {
-             ledCtrl.write_buffer(i, (uint8_t*)pixels->ws2812b[i]);
-        }
-        
-        // Push PCA9955B data (channels start after WS2812B)
-        // ... (Similar logic for I2C) ...
+        // Push full frame to controller
+        ledCtrl.write_frame(pixels);
 
         ledCtrl.show();
         
