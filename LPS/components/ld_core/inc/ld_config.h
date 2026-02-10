@@ -1,7 +1,7 @@
 #pragma once
 
 /**
- * @file config.h
+ * @file ld_config.h
  * @brief Project-wide compile-time switches and runtime limits.
  *
  * This header is intentionally lightweight and shared by multiple components.
@@ -9,8 +9,8 @@
  */
 
 /* Feature toggles */
-#define SD_ENABLE 0
-#define BT_ENABLE 1
+#define SD_ENABLE 1
+#define BT_ENABLE 0
 #define LOGGER_ENABLE 0
 
 /* Per-channel max brightness for PCA9955B path (0..255). */

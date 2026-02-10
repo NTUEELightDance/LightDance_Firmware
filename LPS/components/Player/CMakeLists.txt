@@ -3,5 +3,5 @@ idf_component_register(
 
     INCLUDE_DIRS "include"
 
-    REQUIRES LedController PT_Reader driver esp_driver_gptimer console common
+    REQUIRES LedController PT_Reader driver esp_driver_gptimer console ld_core
 )

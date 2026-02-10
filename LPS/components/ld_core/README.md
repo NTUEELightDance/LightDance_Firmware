@@ -1,8 +1,8 @@
-# Common
+# ld_core
 
 Shared foundation layer for LightDance firmware.
 
-`common` centralizes reusable data types, board/channel configuration, and color-processing utilities used by runtime modules (`Player`, `LedController`, `PT_Reader`, and `main` startup code).
+`ld_core` centralizes reusable data types, board/channel configuration, and color-processing utilities used by runtime modules (`Player`, `LedController`, `PT_Reader`, and `main` startup code).
 
 ## Table of Contents
 
@@ -33,17 +33,17 @@ This component does not provide:
 ## Repository Layout
 
 ```text
-components/common/
+components/ld_core/
 |-- inc/
-|   |-- config.h         # feature flags, brightness caps, timeouts
-|   |-- led_types.h      # color structs, enums, and common constants
-|   |-- math_u8.h        # 8-bit math helpers (lerp/scaling/min/max)
-|   |-- gamma_lut.h      # gamma constants + LUT declarations
-|   |-- led_ops.h        # color conversion/interpolation/output transforms
+|   |-- ld_config.h      # feature flags, brightness caps, timeouts
+|   |-- ld_led_types.h   # color structs, enums, and common constants
+|   |-- ld_math_u8.h     # 8-bit math helpers (lerp/scaling/min/max)
+|   |-- ld_gamma_lut.h   # gamma constants + LUT declarations
+|   |-- ld_led_ops.h     # color conversion/interpolation/output transforms
 |   |-- ld_board.h       # board mapping + channel info structs
-|   `-- frame.h          # shared frame payload definitions
+|   `-- ld_frame.h       # shared frame payload definitions
 |-- src/
-|   |-- gamma_lut.c      # LUT generation implementation
+|   |-- ld_gamma_lut.c   # LUT generation implementation
 |   `-- ld_board.c       # BOARD_HW_CONFIG and ch_info definitions
 `-- CMakeLists.txt
 ```
@@ -77,9 +77,9 @@ Gamma and brightness behavior is selected by `led_type_t`.
 
 ## Public API
 
-All headers under `components/common/inc` are treated as public.
+All headers under `components/ld_core/inc` are treated as public.
 
-### `config.h`
+### `ld_config.h`
 
 Global compile-time flags and limits, including:
 - `SD_ENABLE`, `BT_ENABLE`, `LOGGER_ENABLE`
@@ -88,7 +88,7 @@ Global compile-time flags and limits, including:
 - `I2C_FREQ`, `I2C_TIMEOUT_MS`, `RMT_TIMEOUT_MS`
 - `LD_IGNORE_DRIVER_INIT_FAIL`, `LD_ENABLE_INTERNAL_PULLUP`
 
-### `gamma_lut.h`
+### `ld_gamma_lut.h`
 
 - Gamma constants for OF and LED paths:
   - `GAMMA_OF_R/G/B`
@@ -99,7 +99,7 @@ Global compile-time flags and limits, including:
 - Initializer:
   - `void calc_gamma_lut(void);`
 
-### `led_ops.h`
+### `ld_led_ops.h`
 
 Key operations:
 - Conversion:
@@ -127,7 +127,7 @@ Defines:
   - `extern const hw_config_t BOARD_HW_CONFIG;`
   - `extern ch_info_t ch_info;`
 
-### `frame.h`
+### `ld_frame.h`
 
 Shared frame payload structs:
 - `frame_data`
@@ -147,9 +147,9 @@ If `ch_info` is empty or invalid, downstream modules may fail initialization or 
 ## Usage Example
 
 ```c
-#include "gamma_lut.h"
+#include "ld_gamma_lut.h"
 #include "ld_board.h"
-#include "led_ops.h"
+#include "ld_led_ops.h"
 
 void app_led_prepare(void) {
     calc_gamma_lut();
@@ -169,8 +169,8 @@ void app_led_prepare(void) {
 
 ## Build Integration
 
-`components/common/CMakeLists.txt` registers:
-- Sources: `src/ld_board.c`, `src/gamma_lut.c`
+`components/ld_core/CMakeLists.txt` registers:
+- Sources: `src/ld_board.c`, `src/ld_gamma_lut.c`
 - Public include directory: `inc`
 - Required dependency: `driver`
 
@@ -178,4 +178,4 @@ void app_led_prepare(void) {
 
 - Keep constants in `ld_board.h` synchronized with frame buffers and channel loops.
 - Any gamma/brightness change should be validated on real hardware.
-- `led_ops.h` is header-inline heavy; changes affect all translation units that include it.
+- `ld_led_ops.h` is header-inline heavy; changes affect all translation units that include it.

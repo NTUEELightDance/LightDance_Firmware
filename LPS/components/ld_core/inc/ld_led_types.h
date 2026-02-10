@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 /**
- * @file led_types.h
+ * @file ld_led_types.h
  * @brief Shared LED color types, constants, and constructors.
  */
 

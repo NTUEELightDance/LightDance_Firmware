@@ -1,9 +1,9 @@
-#include "gamma_lut.h"
+#include "ld_gamma_lut.h"
 
 #include <math.h>
 
 /**
- * @file gamma_lut.c
+ * @file ld_gamma_lut.c
  * @brief Gamma LUT generation for all supported LED output paths.
  */
 

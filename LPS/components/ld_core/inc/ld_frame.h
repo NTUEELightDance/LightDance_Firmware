@@ -4,10 +4,10 @@
 #include <stdint.h>
 
 #include "ld_board.h"
-#include "led_types.h"
+#include "ld_led_types.h"
 
 /**
- * @file frame.h
+ * @file ld_frame.h
  * @brief Shared frame payload structures across reader/player/controller.
  */
 

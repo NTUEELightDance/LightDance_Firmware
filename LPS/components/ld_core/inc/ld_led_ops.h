@@ -1,12 +1,12 @@
 #pragma once
 
-#include "config.h"
-#include "gamma_lut.h"
-#include "led_types.h"
-#include "math_u8.h"
+#include "ld_config.h"
+#include "ld_gamma_lut.h"
+#include "ld_led_types.h"
+#include "ld_math_u8.h"
 
 /**
- * @file led_ops.h
+ * @file ld_led_ops.h
  * @brief Inline color operations for GRB/HSV conversion and output transforms.
  */
 

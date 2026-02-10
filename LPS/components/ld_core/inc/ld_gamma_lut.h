@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 /**
- * @file gamma_lut.h
+ * @file ld_gamma_lut.h
  * @brief Gamma configuration and lookup tables for LED output correction.
  */
 

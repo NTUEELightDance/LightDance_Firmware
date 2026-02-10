@@ -2,7 +2,7 @@
 
 #include "driver/i2c_master.h"
 
-#include "config.h"
+#include "ld_config.h"
 #include "ld_board.h"
 
 #ifdef __cplusplus

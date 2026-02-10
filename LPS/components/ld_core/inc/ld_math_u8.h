@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 /**
- * @file math_u8.h
+ * @file ld_math_u8.h
  * @brief Small integer math helpers for 8-bit color pipelines.
  */
 
