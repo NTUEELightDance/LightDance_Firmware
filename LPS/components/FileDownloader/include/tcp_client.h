@@ -9,7 +9,7 @@ extern "C" {
 // Wi-Fi & TCP Server Config
 #define TCP_WIFI_SSID      "lightdance"
 #define TCP_WIFI_PASS      "ntueelightdance"
-#define TCP_SERVER_IP      "192.168.50.4" // server IP
+#define TCP_SERVER_IP      "192.168.50.214" // server IP
 #define TCP_SERVER_PORT    3333            // server port
 
 /**
