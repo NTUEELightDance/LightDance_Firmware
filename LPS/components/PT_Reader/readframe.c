@@ -82,6 +82,14 @@ static esp_err_t mount_sdcard(void) {
     return ESP_OK;
 }
 
+static void unmount_sdcard(void)
+{
+    if (g_sd_card) {
+        /* 配對 esp_vfs_fat_sdmmc_mount("/sd", ..., &g_sd_card) */
+        esp_vfs_fat_sdcard_unmount("/sd", g_sd_card);
+        g_sd_card = NULL;
+    }
+}
 /* ================= SD reader task ================= */
 
 static void sd_reader_task(void* arg) {
@@ -106,7 +114,10 @@ static void sd_reader_task(void* arg) {
             vTaskDelay(pdMS_TO_TICKS(50));  // 避免 tight loop
             continue;
         }
-
+        if (eof_reached) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
 
         /* ---- read one frame ---- */
         esp_err_t err = frame_reader_read(&frame_buf);
@@ -132,6 +143,7 @@ static void sd_reader_task(void* arg) {
     }
 
     ESP_LOGI(TAG, "sd_reader_task exit");
+    sd_task = NULL;
     vTaskDelete(NULL);
 }
 
@@ -237,7 +249,8 @@ esp_err_t frame_reset(void) {
     eof_reached = false;
     has_error = false;
     g_frame_status.err = ESP_OK;
-
+    memset(&frame_buf, 0, sizeof(frame_buf));
+    g_frame_status.err = ESP_FAIL;   // reset 後第一個 read_frame 不可能誤回 OK
     cmd = CMD_RESET;
     xSemaphoreGive(sem_free);
     return ESP_OK;
@@ -245,38 +258,33 @@ esp_err_t frame_reset(void) {
 
 /* ---- deinit frame system ---- */
 
+
 esp_err_t frame_system_deinit(void) {
-    if(!inited) {
-        ESP_LOGW(TAG, "frame_system_deinit called when not initialized");
-        return ESP_ERR_INVALID_STATE;
-    }
+    if(!inited) return ESP_ERR_INVALID_STATE;
 
     running = false;
 
-    if(sd_task) {
-        xSemaphoreGive(sem_free);
+    if (sem_free) xSemaphoreGive(sem_free);
+
+    for (int i = 0; i < 50 && sd_task != NULL; i++) { 
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 
-    if(sem_free)
-        vSemaphoreDelete(sem_free);
-    if(sem_ready)
-        vSemaphoreDelete(sem_ready);
-
     frame_reader_deinit();
-
+    unmount_sdcard();                            
+    if(sem_free)  vSemaphoreDelete(sem_free);
+    if(sem_ready) vSemaphoreDelete(sem_ready);
     sem_free = sem_ready = NULL;
-    sd_task = NULL;
+
     inited = false;
     eof_reached = false;
     has_error = false;
     g_frame_status.err = ESP_OK;
     cmd = CMD_NONE;
+    sd_task = NULL;
 
-    ESP_LOGI(TAG, "frame system deinit");
     return ESP_OK;
 }
-
 /* ---- end of file ---- */
 
 bool is_eof_reached(void) {
