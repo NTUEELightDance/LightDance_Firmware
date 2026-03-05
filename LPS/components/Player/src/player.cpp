@@ -2,7 +2,6 @@
 
 #include "esp_check.h"
 #include "esp_log.h"
-#include "readframe.h"
 
 static const char* TAG = "Player";
 
@@ -85,11 +84,6 @@ esp_err_t Player::exit() {
     return sendEvent(e);
 }
 
-esp_err_t Player::sdtest() {
-    frame_system_deinit();
-    frame_system_init("0:/control.dat", "0:/frame.dat");
-    return ESP_OK;
-}
 /* ================= Playback control (called by State) ================= */
 
 esp_err_t Player::startPlayback() {

@@ -42,14 +42,6 @@ esp_err_t FrameBuffer::init() {
 
     count = 0;
 #if LD_CFG_ENABLE_SD
-    if(is_frame_system_init == false) {
-        esp_err_t err = frame_system_init("0:/control.dat", "0:/frame.dat");
-        if(err != ESP_OK) {
-            ESP_LOGE(TAG, "frame_system_init failed: %s", esp_err_to_name(err));
-            return err;
-        }
-        is_frame_system_init = true;
-    }
     read_frame(current);
     // print_table_frame(*current);
 
@@ -93,10 +85,6 @@ esp_err_t FrameBuffer::reset() {
 }
 
 esp_err_t FrameBuffer::deinit() {
-    #if LD_CFG_ENABLE_SD
-        frame_system_deinit();
-        is_frame_system_init = false;
-    #endif
     return ESP_OK;
 }
 

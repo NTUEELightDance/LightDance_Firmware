@@ -53,8 +53,6 @@ class FrameBuffer {
     void brightness_correction();
 
     table_frame_t frame0{}, frame1{};
-
-    bool is_frame_system_init = true;
     table_frame_t* current;
     table_frame_t* next;
 
