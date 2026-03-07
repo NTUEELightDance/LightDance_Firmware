@@ -29,6 +29,7 @@ FrameBuffer::FrameBuffer() {
 FrameBuffer::~FrameBuffer() {}
 
 esp_err_t FrameBuffer::init() {
+    
     test_mode_ = FbTestMode::OFF;
     eof_reported_ = false;
 
@@ -130,7 +131,7 @@ FbComputeStatus FrameBuffer::compute(uint64_t time_ms) {
 
     // ---- Normal path ----
     FbComputeStatus status = handle_frames(time_ms);
-    if(status == FbComputeStatus::ERROR) {
+    if(status == FbComputeStatus::ERROR_GENERAL || status == FbComputeStatus::ERROR_CRITICAL) {
         return status;
     }
 
@@ -163,7 +164,7 @@ void FrameBuffer::fill(grb8_t color) {
 FbComputeStatus FrameBuffer::handle_frames(uint64_t time_ms) {
     if(current == nullptr || next == nullptr) {
         ESP_LOGE(TAG, "FrameBuffer not initialized");
-        return FbComputeStatus::ERROR;
+        return FbComputeStatus::ERROR_GENERAL;
     }
 
     if(time_ms < current->timestamp) {
@@ -185,10 +186,30 @@ FbComputeStatus FrameBuffer::handle_frames(uint64_t time_ms) {
             }
             return FbComputeStatus::HOLD;
         }
-        if(err != ESP_OK) {
+        if(err == ESP_ERR_INVALID_SIZE) {
             ESP_LOGE(TAG, "read_frame failed: %s", esp_err_to_name(err));
             buffer = current->data;
-            return FbComputeStatus::ERROR;
+            return FbComputeStatus::ERROR_GENERAL;
+        }
+        if(err == ESP_ERR_INVALID_ARG) {
+            ESP_LOGE(TAG, "read_frame failed: %s", esp_err_to_name(err));
+            buffer = current->data;
+            return FbComputeStatus::ERROR_GENERAL;
+        }
+        if(err == ESP_ERR_INVALID_CRC) {
+            ESP_LOGE(TAG, "read_frame failed: %s", esp_err_to_name(err));
+            buffer = current->data;
+            return FbComputeStatus::ERROR_GENERAL;
+        }
+        if(err == ESP_FAIL) {
+            ESP_LOGE(TAG, "read_frame failed: %s", esp_err_to_name(err));
+            buffer = current->data;
+            return FbComputeStatus::ERROR_GENERAL;
+        }
+        if(err == ESP_ERR_INVALID_STATE) {
+            ESP_LOGE(TAG, "read_frame failed: %s", esp_err_to_name(err));
+            buffer = current->data;
+            return FbComputeStatus::ERROR_GENERAL;
         }
         // print_table_frame(*next);
 #else
@@ -198,7 +219,7 @@ FbComputeStatus FrameBuffer::handle_frames(uint64_t time_ms) {
         if(next->timestamp <= current->timestamp) {
             ESP_LOGE(TAG, "Non-monotonic timestamp: current=%" PRIu64 ", next=%" PRIu64, current->timestamp, next->timestamp);
             buffer = current->data;
-            return FbComputeStatus::ERROR;
+            return FbComputeStatus::ERROR_GENERAL;
         }
     }
 

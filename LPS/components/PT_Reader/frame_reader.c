@@ -1,5 +1,4 @@
 #include "frame_reader.h"
-
 #include <string.h>
 #include "esp_log.h"
 #include "ff.h"
@@ -12,7 +11,7 @@ static const uint8_t EXPECTED_VERSION_MAJOR = 1;
 static const uint8_t EXPECTED_VERSION_MINOR = 2;
 
 #define FRAME_RAW_MAX_SIZE 8192
-#define CHECKSUM_SIZE 4  // uint8 (reserved)
+#define CHECKSUM_SIZE 4  // uint8 (reserved)          
 
 /* ================= static ================= */
 
@@ -64,7 +63,7 @@ esp_err_t frame_reader_init(const char* path) {
     /* -------- check version -------- */
 
     uint8_t version_bytes[2];
-    UINT br;
+    UINT br = 0;
     fr = f_read(&fp, version_bytes, 2, &br);
     
     if(fr != FR_OK || br != 2) {
@@ -150,8 +149,21 @@ esp_err_t frame_reader_read(table_frame_t* out) {
     memset(out, 0, sizeof(*out));
 
     FRESULT fr = f_read(&fp, raw, g_frame_size, &br);
-    if(fr != FR_OK || br != g_frame_size) {
-        return ESP_ERR_NOT_FOUND;
+
+    /* 1) FatFs 回錯：I/O error，不是 EOF */
+    if (fr != FR_OK) {
+        ESP_LOGE(TAG, "f_read failed (fr=%d br=%u)", (int)fr, (unsigned)br);
+        return ESP_FAIL;  // 或 ESP_ERR_INVALID_STATE / 你自訂 IO err
+    }
+
+    /* 2) fr OK 但 br 不足：分成 EOF 與 truncated/corrupt */
+    if (br != g_frame_size) {
+        if (br == 0) {
+            return ESP_ERR_NOT_FOUND;     // 你目前用 NOT_FOUND 當 EOF（沿用）
+        }
+        ESP_LOGE(TAG, "incomplete frame: need=%u got=%u",
+                (unsigned)g_frame_size, (unsigned)br);
+        return ESP_ERR_INVALID_SIZE;      // 檔案截斷/損壞
     }
 
     uint8_t* p = raw;

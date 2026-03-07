@@ -20,7 +20,8 @@ enum class FbComputeStatus : uint8_t {
     OK = 0,
     HOLD,
     EOF_REACHED,
-    ERROR,
+    ERROR_GENERAL, 
+    ERROR_CRITICAL
 };
 
 class FrameBuffer {
@@ -52,7 +53,6 @@ class FrameBuffer {
     void brightness_correction();
 
     table_frame_t frame0{}, frame1{};
-
     table_frame_t* current;
     table_frame_t* next;
 
