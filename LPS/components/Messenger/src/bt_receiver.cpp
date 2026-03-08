@@ -154,8 +154,7 @@ static void hci_cmd_send_ble_adv_enable(uint8_t enable) {
 static void hci_cmd_send_ble_set_adv_param_ack(void) {
     uint8_t buf[128];
     uint8_t *p = buf;
-    // Standard Interval: 200ms (320 * 0.625)
-    uint16_t interval = 48; 
+    uint16_t interval = 32; 
     
     UINT8_TO_STREAM(p, H4_TYPE_COMMAND);
     UINT16_TO_STREAM(p, 0x2006); // HCI_BLE_WRITE_ADV_PARAMS
@@ -187,7 +186,7 @@ typedef struct {
 // Background task to send a single ACK packet, then resume scanning
 static void send_ack_task(void *arg) {
     ack_task_params_t *params = (ack_task_params_t *)arg;
-    
+    vTaskDelay(pdMS_TO_TICKS(150)); // Safety Delay
     // Stop Scanning First, Release RF for TX.
     uint8_t scan_buf[32];
     make_cmd_ble_set_scan_enable(scan_buf, 0, 0); // Disable Scan
@@ -228,7 +227,7 @@ static void send_ack_task(void *arg) {
 
     // Start Adv
     hci_cmd_send_ble_adv_enable(1);
-    vTaskDelay(pdMS_TO_TICKS(100)); // Broadcast for 100ms
+    vTaskDelay(pdMS_TO_TICKS(300)); // Broadcast for 300ms
     
     // Stop Adv
     hci_cmd_send_ble_adv_enable(0);
@@ -404,7 +403,6 @@ static void IRAM_ATTR timer_timeout_cb(void* arg) {
             int32_t remaining_us = (int32_t)(target_time - now);
             if (remaining_us < 0) remaining_us = 0;
             
-            vTaskDelay(pdMS_TO_TICKS(150)); // Safety Delay before ACK TX
             trigger_ack_task(s_config.my_player_id, 
                              s_last_locked_cmd.cmd_id, 
                              s_last_locked_cmd.cmd_type, 
