@@ -2,18 +2,26 @@
 
 #include <stdbool.h>
 #include "esp_err.h"
-
+#include "ff.h"
 #include "ld_frame.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+typedef struct {
+    esp_err_t err;
+    FRESULT   fr;    // FatFs error
+    UINT      br;    // bytes read
+
+
+}frame_reader_status;
+
 extern ch_info_t ch_info_snapshot;
 
 /* ============================================================
- * Frame System (SD -> Frame Reader -> Player)
+ Frame System (SD -> Frame Reader -> Player)
  *
- * 使用流程：
+ * how to use：
  *
  *   frame_system_init("0:/control.dat", "0:/frame.dat");
  *
@@ -30,12 +38,13 @@ extern ch_info_t ch_info_snapshot;
  * @brief 初始化整個 frame system
  *
  * 會完成：
+ *   - SD card mount
  *   - 讀取 control.dat → ch_info
  *   - 初始化 frame_reader
- *   - 建立 SD reader task
+  - 建立 SD reader task
  *
- * @param control_path  control.dat 路徑（例如 "0:/control.dat"）
- * @param frame_path    frame.dat 路徑（例如 "0:/frame.dat"）
+ * @param control_path  example "0:/control.dat"
+ * @param frame_path    example: "0:/frame.dat"
  *
  * @return
  *   - ESP_OK
@@ -76,6 +85,8 @@ esp_err_t frame_reset(void);
  * 安全可重入
  */
 esp_err_t frame_system_deinit(void);
+
+int get_sd_card_id(void);
 
 bool is_eof_reached(void);
 

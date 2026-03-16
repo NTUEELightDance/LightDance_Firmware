@@ -3,10 +3,15 @@
 #include <stdint.h>
 #include "esp_err.h"
 #include "ld_frame.h"
+#include "ff.h"
+#include "readframe.h"
+#include "frame_errors.h"
+
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+// frame_reader.h
 
 /* ============================================================
  * Frame Reader API
@@ -63,7 +68,7 @@ uint32_t frame_reader_frame_size(void);
  *   - ESP_ERR_NOT_FOUND     EOF 或無法再讀
  *   - ESP_ERR_INVALID_CRC   checksum mismatch（檔案指標已回復）
  */
-esp_err_t frame_reader_read(table_frame_t* out);
+esp_err_t frame_reader_read(table_frame_t* out, frame_reader_status* st);
 
 esp_err_t frame_reader_reset(void);
 

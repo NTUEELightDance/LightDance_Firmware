@@ -123,6 +123,7 @@ static void app_task(void* arg) {
         vTaskDelay(portMAX_DELAY); // Halt task if critical files are missing
         frame_sys_ready = false;
         ESP_LOGE(TAG, "frame system init failed");
+        unmount_sdcard();
     }
     else {
         frame_inited = true;
