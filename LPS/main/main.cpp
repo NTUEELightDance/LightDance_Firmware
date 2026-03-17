@@ -70,7 +70,7 @@ static void sys_cmd_task(void* arg) {
                         sys_cmd_t reset_cmd = RESET;
                         xQueueSend(sys_cmd_queue, &reset_cmd, 0);
                     }
-                    
+
                     break;
 
                 default:
@@ -86,13 +86,12 @@ static void sys_cmd_task(void* arg) {
 static void app_task(void* arg) {
     ESP_LOGI(TAG, "app_task start, HWM=%u", uxTaskGetStackHighWaterMark(NULL));
 
-    // 0. Mount SD Card 
+    // 0. Mount SD Card
     esp_err_t err = mount_sdcard();
-    if (err == ESP_OK) {
+    if(err == ESP_OK) {
         sd_mounted = true;
         ESP_LOGI(TAG, "SD card mount success");
-    }
-    else {
+    } else {
         sd_mounted = false;
         ESP_LOGE(TAG, "SD card mount failed: %s", esp_err_to_name(err));
     }
@@ -103,8 +102,7 @@ static void app_task(void* arg) {
     if(err == ESP_OK) {
         logger_inited = true;
         ESP_LOGI(TAG, "SD Logger success");
-    }
-    else{
+    } else {
         logger_inited = false;
         ESP_LOGE(TAG, "SD Logger init failed: %s", esp_err_to_name(err));
     }
@@ -116,19 +114,37 @@ static void app_task(void* arg) {
     ESP_LOGI(TAG, "frame_system_init=%s", esp_err_to_name(err));
     ESP_LOGD(TAG, "HWM after frame_system_init=%u", uxTaskGetStackHighWaterMark(NULL));
 
-    //vTaskDelay(pdMS_TO_TICKS(1000));
+    // vTaskDelay(pdMS_TO_TICKS(1000));
 
     if(err != ESP_OK) {
         frame_inited = false;
-        vTaskDelay(portMAX_DELAY); // Halt task if critical files are missing
+        vTaskDelay(portMAX_DELAY);  // Halt task if critical files are missing
         frame_sys_ready = false;
         ESP_LOGE(TAG, "frame system init failed");
-    }
-    else {
+    } else {
         frame_inited = true;
         frame_sys_ready = true;
     }
 #endif
+
+    esp_reset_reason_t reason = esp_reset_reason();
+
+    switch(reason) {
+        case ESP_RST_POWERON:
+            ESP_LOGI(TAG, "Power on reset");
+            break;
+        case ESP_RST_PANIC:
+            ESP_LOGE(TAG, "System panic reset");
+            break;
+        case ESP_RST_TASK_WDT:
+            ESP_LOGE(TAG, "Task watchdog reset");
+            break;
+        case ESP_RST_BROWNOUT:
+            ESP_LOGE(TAG, "Brownout reset");
+            break;
+        default:
+            ESP_LOGW(TAG, "Reset reason: %d", reason);
+    }
 
     // 3. Pre-calculate Gamma Lookup Table for LED color correction
     calc_gamma_lut();
