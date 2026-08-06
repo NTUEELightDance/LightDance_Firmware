@@ -19,7 +19,7 @@
 #include "sd_writer.h"  
 #include "bt_receiver.h"
 #include "readframe.h"
-#include "sd_utils.h"
+#include "ld_nvs.h"
 
 static const char *TAG = "TCP_CLIENT";
 
@@ -129,7 +129,7 @@ static int recv_exact(int sock, void *buf, size_t len) {
     return received;
 }
 
-/* Process to download a file from TCP server and (simulated) save to SD card */
+/* Process to download a file from TCP server and save it to SPIFFS. */
 static esp_err_t download_file(int sock, const char* filename) {
     uint32_t net_size = 0;
     
@@ -148,14 +148,14 @@ static esp_err_t download_file(int sock, const char* filename) {
     }
 
 #if LD_CFG_ENABLE_PT
-    // 2. Initialize SD writer (only execute when SD card is enabled)
+    // 2. Initialize the SPIFFS writer.
     if (sd_writer_init(filename) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to init sd_writer for %s", filename);
         free(buf);
         return ESP_FAIL;
     }
 #else
-    ESP_LOGW(TAG, "SD Card disabled. Mocking write process for %s", filename);
+    ESP_LOGW(TAG, "Persistent storage disabled. Mocking write process for %s", filename);
 #endif
 
     // 3. Receive file data in chunks
@@ -173,9 +173,9 @@ static esp_err_t download_file(int sock, const char* filename) {
         }
 
 #if LD_CFG_ENABLE_PT
-        // Perform real SD card write
+        // Perform the SPIFFS write.
         if (sd_writer_write(buf, n) != ESP_OK) {
-            ESP_LOGE(TAG, "SD Write failed");
+            ESP_LOGE(TAG, "SPIFFS write failed");
             sd_writer_close();
             free(buf);
             return ESP_FAIL;
@@ -240,7 +240,8 @@ static void update_task_func(void *pvParameters) {
 
                 // [Step 3] Message Player ID
 #if LD_CFG_ENABLE_PT
-                int pid = get_sd_card_id();
+                uint8_t stored_pid = 0;
+                int pid = ld_nvs_get_player_id(&stored_pid) == ESP_OK ? stored_pid : 1;
                 if (pid <= 0) pid = 1; // Fallback protection
 #else
                 int pid = 1; // Force ID as 1 during test without SD card
@@ -251,8 +252,8 @@ static void update_task_func(void *pvParameters) {
                 ESP_LOGI(TAG, "Sent Player ID: %s", msg);
 
                 // [Step 4] Download Files
-                if (download_file(sock, "0:/control.dat") == ESP_OK) {
-                    download_file(sock, "0:/frame.dat");
+                if (download_file(sock, "/spiffs/control.dat") == ESP_OK) {
+                    download_file(sock, "/spiffs/frame.dat");
                 }
                 const char* ack_msg = "DONE\n";
                 send(sock, ack_msg, strlen(ack_msg), 0);

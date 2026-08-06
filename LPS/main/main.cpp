@@ -8,7 +8,7 @@
 #include "ld_board.h"
 #include "ld_config.h"
 #include "ld_gamma_lut.h"
-#include "nvs_flash.h"
+#include "ld_nvs.h"
 
 #include "esp_system.h"
 #include "player.hpp"
@@ -26,7 +26,7 @@ static const char* TAG = "APP";
 static bool frame_sys_ready = false;
 QueueHandle_t sys_cmd_queue = NULL;
 
-static bool sd_mounted = false;
+static bool spiffs_mounted = false;
 static bool logger_inited = false;
 static bool frame_inited = false;
 
@@ -194,27 +194,27 @@ static void sys_cmd_task(void* arg) {
 static void app_task(void* arg) {
     ESP_LOGI(TAG, "app_task start, HWM=%u", uxTaskGetStackHighWaterMark(NULL));
 
-    // 0. Mount SD Card
-    esp_err_t err = mount_sdcard();
+    // 0. Mount internal SPIFFS storage.
+    esp_err_t err = mount_spiffs();
     if(err == ESP_OK) {
-        sd_mounted = true;
-        ESP_LOGI(TAG, "SD card mount success");
+        spiffs_mounted = true;
+        ESP_LOGI(TAG, "SPIFFS mount success");
     } else {
-        sd_mounted = false;
-        ESP_LOGE(TAG, "SD card mount failed: %s", esp_err_to_name(err));
+        spiffs_mounted = false;
+        ESP_LOGE(TAG, "SPIFFS mount failed: %s", esp_err_to_name(err));
     }
 
     vTaskDelay(pdMS_TO_TICKS(100));
 
 #if LD_CFG_ENABLE_LOGGER
-    // 1. Initialize SD Logger (Optional)
+    // 1. Initialize persistent logger (optional).
     err = sd_log_init();
     if(err == ESP_OK) {
         logger_inited = true;
-        ESP_LOGI(TAG, "SD Logger success");
+        ESP_LOGI(TAG, "SPIFFS logger success");
     } else {
         logger_inited = false;
-        ESP_LOGE(TAG, "SD Logger init failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "SPIFFS logger init failed: %s", esp_err_to_name(err));
     }
 
     vTaskDelay(pdMS_TO_TICKS(100));
@@ -222,8 +222,8 @@ static void app_task(void* arg) {
 #endif
 
 #if LD_CFG_ENABLE_PT
-    // 2. Initialize SD Card and frame reading system
-    err = frame_system_init("0:/control.dat", "0:/frame.dat");
+    // 2. Initialize the frame reading system from SPIFFS.
+    err = frame_system_init("/spiffs/control.dat", "/spiffs/frame.dat");
     ESP_LOGI(TAG, "frame_system_init=%s", esp_err_to_name(err));
     ESP_LOGD(TAG, "HWM after frame_system_init=%u", uxTaskGetStackHighWaterMark(NULL));
 
@@ -270,16 +270,20 @@ static void app_task(void* arg) {
 
 #if LD_CFG_ENABLE_BT
     // 7. Initialize NVS and Bluetooth Receiver
-    nvs_flash_init();
+    err = ld_nvs_init();
+    if(err != ESP_OK) {
+        ESP_LOGE(TAG, "NVS init failed: %s", esp_err_to_name(err));
+    }
 
-    // Read assigned Player ID from SD card (fallback to 1 for testing)
-    int player_id;
-#if LD_CFG_ENABLE_PT
-    player_id = get_sd_card_id();
-#endif
-
-    if(player_id == 0)
-        ESP_LOGW(TAG, "get_sd_card_id() return 0.");
+    // Player ID is persisted in NVS because SPIFFS has no volume label.
+    uint8_t stored_player_id = 0;
+    int player_id = ld_nvs_get_player_id(&stored_player_id) == ESP_OK ? stored_player_id : 0;
+    if(player_id < 1 || player_id > 31) {
+        ESP_LOGW(TAG, "invalid stored player ID %d; using 0", player_id);
+        player_id = 0;
+    } else {
+        ESP_LOGI(TAG, "stored player ID = %d", player_id);
+    }
 
     // Configure and start the BLE Receiver
     bt_receiver_config_t rx_cfg = {
@@ -295,8 +299,8 @@ static void app_task(void* arg) {
     vTaskDelay(pdMS_TO_TICKS(100));
 #else
     // Fallback to console testing if BT is disabled
-    console_test();
 #endif
+    console_test();
 
     // Indicate the initialization is completed.
     Player::getInstance().test(0, 0, 128);

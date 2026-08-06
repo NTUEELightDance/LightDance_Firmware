@@ -1,6 +1,5 @@
 #pragma once
 #include "esp_err.h"
-#include "ff.h"
 #include <stddef.h>
 
 esp_err_t sd_writer_init(const char *path);

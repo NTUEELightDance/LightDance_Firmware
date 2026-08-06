@@ -3,5 +3,5 @@ idf_component_register(
 
     INCLUDE_DIRS "include"
 
-    REQUIRES fatfs sdmmc esp_wifi lwip nvs_flash PT_Reader Messenger SD
+    REQUIRES esp_wifi lwip nvs_flash PT_Reader Messenger SD ld_storage
 )

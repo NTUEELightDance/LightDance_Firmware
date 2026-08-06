@@ -1,9 +1,10 @@
 #include "sd_writer.h"
+#include <errno.h>
+#include <stdio.h>
 #include "esp_log.h"
-#include "ff.h"
 
 static const char *TAG = "sd_writer";
-static FIL file;
+static FILE *file = NULL;
 static bool file_opened = false;
 
 /* ========= API ========= */
@@ -15,9 +16,9 @@ esp_err_t sd_writer_init(const char *file_path)
         return ESP_OK;
     }
 
-    FRESULT fr = f_open(&file, file_path, FA_WRITE | FA_CREATE_ALWAYS);
-    if (fr != FR_OK) {
-        ESP_LOGE(TAG, "f_open failed (%d). Check if SD is mounted in main.", fr);
+    file = fopen(file_path, "wb");
+    if (!file) {
+        ESP_LOGE(TAG, "fopen failed for %s (errno=%d). Check if SPIFFS is mounted.", file_path, errno);
         return ESP_FAIL;
     }
 
@@ -30,11 +31,9 @@ esp_err_t sd_writer_write(const void *data, size_t len)
 {
     if (!file_opened) return ESP_ERR_INVALID_STATE;
 
-    UINT bw = 0;
-    FRESULT fr = f_write(&file, data, len, &bw);
-
-    if (fr != FR_OK || bw != len) {
-        ESP_LOGE(TAG, "f_write failed fr=%d bw=%d/%d", fr, bw, len);
+    size_t bw = fwrite(data, 1, len, file);
+    if (bw != len) {
+        ESP_LOGE(TAG, "fwrite failed bw=%u/%u errno=%d", (unsigned)bw, (unsigned)len, errno);
         return ESP_FAIL;
     }
 
@@ -44,7 +43,9 @@ esp_err_t sd_writer_write(const void *data, size_t len)
 void sd_writer_close(void)
 {
     if (file_opened) {
-        f_close(&file);
+        fflush(file);
+        fclose(file);
+        file = NULL;
         file_opened = false;
         ESP_LOGI(TAG, "file closed");
     }

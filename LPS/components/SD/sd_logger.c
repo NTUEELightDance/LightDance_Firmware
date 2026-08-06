@@ -1,5 +1,4 @@
 #include "sd_logger.h"
-#include "sd_utils.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -107,12 +106,11 @@ esp_err_t sd_log_init() {
     }
 
     //update logger name while reset
-    //use 8.3 filename for FATfs
     char path[32];
     int index = 1;
     struct stat st;
     while (1) {
-        snprintf(path, sizeof(path), "/sd/log%d.log", index); //don't exceed 8 char for logXXX.log
+        snprintf(path, sizeof(path), "/spiffs/log%d.log", index);
         if (stat(path, &st) != 0) {
             break;
         }

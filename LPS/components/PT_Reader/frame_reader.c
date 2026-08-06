@@ -1,7 +1,8 @@
 #include "frame_reader.h"
+#include <errno.h>
+#include <stdio.h>
 #include <string.h>
 #include "esp_log.h"
-#include "ff.h"
 #include "ld_board.h"  // global ch_info
 #include "readframe.h"
 
@@ -18,7 +19,7 @@ static const uint8_t EXPECTED_VERSION_MINOR = 2;
 
 static const char* TAG = "frame_reader";
 
-static FIL fp;
+static FILE* fp = NULL;
 static bool opened = false;
 static uint32_t g_frame_size = 0;
 
@@ -55,21 +56,19 @@ esp_err_t frame_reader_init(const char* path) {
 
     /* -------- open file -------- */
 
-    FRESULT fr = f_open(&fp, path, FA_READ);
-    if(fr != FR_OK) {
-        ESP_LOGE(TAG, "open %s failed (fr=%d)", path, fr);
-        return ESP_ERR_NOT_FOUND;
+    fp = fopen(path, "rb");
+    if(!fp) {
+        ESP_LOGE(TAG, "open %s failed (errno=%d)", path, errno);
+        return errno == ENOENT ? ESP_ERR_NOT_FOUND : ESP_FAIL;
     }
 
     /* -------- check version -------- */
 
     uint8_t version_bytes[2];
-    UINT br = 0;
-    fr = f_read(&fp, version_bytes, 2, &br);
-    
-    if(fr != FR_OK || br != 2) {
+    if(fread(version_bytes, 1, sizeof(version_bytes), fp) != sizeof(version_bytes)) {
         ESP_LOGE(TAG, "Failed to read version header");
-        f_close(&fp);
+        fclose(fp);
+        fp = NULL;
         return ESP_FAIL;
     }
     
@@ -79,7 +78,8 @@ esp_err_t frame_reader_init(const char* path) {
     if(major != EXPECTED_VERSION_MAJOR || minor != EXPECTED_VERSION_MINOR) {
         ESP_LOGE(TAG, "Version mismatch! Expected %d.%d, got %d.%d", 
                  EXPECTED_VERSION_MAJOR, EXPECTED_VERSION_MINOR, major, minor);
-        f_close(&fp);
+        fclose(fp);
+        fp = NULL;
         return ESP_FAIL;
     }
     
@@ -95,7 +95,8 @@ esp_err_t frame_reader_init(const char* path) {
 
     if(g_frame_size > FRAME_RAW_MAX_SIZE) {
         ESP_LOGE(TAG, "frame_size %u exceeds max", (unsigned)g_frame_size);
-        f_close(&fp);
+        fclose(fp);
+        fp = NULL;
         return ESP_ERR_INVALID_SIZE;
     }
 
@@ -110,7 +111,8 @@ void frame_reader_deinit(void) {
     if(!opened)
         return;
 
-    f_close(&fp);
+    fclose(fp);
+    fp = NULL;
     opened = false;
 }
 
@@ -124,8 +126,8 @@ esp_err_t frame_reader_seek(uint32_t frame_idx) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    FSIZE_t offset = (FSIZE_t)FRAME_FILE_HEADER_SIZE + ((FSIZE_t)frame_idx * (FSIZE_t)g_frame_size);
-    if(f_lseek(&fp, offset) != FR_OK)
+    long offset = (long)FRAME_FILE_HEADER_SIZE + ((long)frame_idx * (long)g_frame_size);
+    if(fseek(fp, offset, SEEK_SET) != 0)
         return ESP_FAIL;
 
     return ESP_OK;
@@ -150,15 +152,14 @@ esp_err_t frame_reader_read(table_frame_t* out) {
         return ESP_ERR_INVALID_ARG;
 
     static uint8_t raw[FRAME_RAW_MAX_SIZE];
-    UINT br;
 
     memset(out, 0, sizeof(*out));
 
-    FRESULT fr = f_read(&fp, raw, g_frame_size, &br);
+    size_t br = fread(raw, 1, g_frame_size, fp);
 
     /* 1) FatFs 回錯：I/O error，不是 EOF */
-    if (fr != FR_OK) {
-        ESP_LOGE(TAG, "f_read failed (fr=%d br=%u)", (int)fr, (unsigned)br);
+    if (ferror(fp)) {
+        ESP_LOGE(TAG, "fread failed (errno=%d br=%u)", errno, (unsigned)br);
         return ESP_FAIL;  // 或 ESP_ERR_INVALID_STATE / 你自訂 IO err
     }
 

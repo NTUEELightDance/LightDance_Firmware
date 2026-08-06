@@ -141,10 +141,11 @@ esp_err_t Player::updatePlayback() {
         e.type = EVENT_STOP;
         ESP_RETURN_ON_ERROR(sendEvent(e), TAG, "stop event on framebuffer error");
         // return ESP_FAIL;
-    }
-    else if(fb_status == FbComputeStatus::ERROR_CRITICAL) {
+    } else if(fb_status == FbComputeStatus::ERROR_CRITICAL) {
         ESP_LOGE(TAG, "framebuffer compute critical error, restarting...");
-        esp_restart();
+        Event e{};
+        e.type = EVENT_STOP;
+        ESP_RETURN_ON_ERROR(sendEvent(e), TAG, "stop event on framebuffer error");
     }
 
     frame_data* buf = fb.get_buffer();
@@ -176,7 +177,6 @@ esp_err_t Player::testPlayback(TestData data) {
 
     return ESP_OK;
 }
-
 
 /* ================= RTOS ================= */
 

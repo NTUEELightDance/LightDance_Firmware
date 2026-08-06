@@ -1,6 +1,5 @@
-// sd_mount.h
-#ifndef SD_MOUNT_H
-#define SD_MOUNT_H
+#ifndef SPIFFS_UTILS_H
+#define SPIFFS_UTILS_H
 
 #include "esp_err.h"
 
@@ -9,24 +8,18 @@ extern "C" {
 #endif
 
 /**
- * @brief Mount SD card to /sd directory
+ * @brief Mount the SPIFFS partition at /spiffs
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t mount_sdcard(void);
+esp_err_t mount_spiffs(void);
 
 /**
- * @brief Unmount SD card
+ * @brief Unmount SPIFFS
  */
-void unmount_sdcard(void);
-
-/**
- * @brief Get player ID from SD card volume label
- * @return Player ID (1-31) if label is "LPSxx", 0 otherwise
- */
-int get_sd_card_id(void);
+void unmount_spiffs(void);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // SD_MOUNT_H
+#endif // SPIFFS_UTILS_H

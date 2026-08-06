@@ -5,6 +5,6 @@ idf_component_register(
 
     PRIV_INCLUDE_DIRS "src"
 
-    REQUIRES driver esp_timer freertos log ld_core
+    REQUIRES esp_driver_i2c esp_driver_rmt esp_timer freertos log ld_core
 )
 

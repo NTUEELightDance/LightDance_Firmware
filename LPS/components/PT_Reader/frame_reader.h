@@ -25,7 +25,7 @@ extern "C" {
 /**
  * @brief  初始化 frame reader，並開啟 frame.dat
  *
- * @param  path   frame.dat 路徑（例如 "0:/frame.dat"）
+ * @param  path   frame.dat 路徑（例如 "/spiffs/frame.dat"）
  *
  * @return
  *   - ESP_OK                成功

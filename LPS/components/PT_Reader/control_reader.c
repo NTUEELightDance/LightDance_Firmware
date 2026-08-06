@@ -1,10 +1,11 @@
 #include "control_reader.h"
 
+#include <errno.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "esp_log.h"
-#include "ff.h"
 #include "ld_board.h"
 
 static const char* TAG = "control_reader";
@@ -29,20 +30,6 @@ static inline void checksum_add_u32(uint32_t* sum, uint32_t val) {
 
 /* -------------------------------------------------- */
 
-static esp_err_t fr_to_err(FRESULT fr) {
-    switch(fr) {
-        case FR_OK:
-            return ESP_OK;
-        case FR_NO_FILE:
-        case FR_NO_PATH:
-            return ESP_ERR_NOT_FOUND;
-        case FR_DENIED:
-            return ESP_ERR_INVALID_STATE;
-        default:
-            return ESP_FAIL;
-    }
-}
-
 static void clear_cached_timestamps(void) {
     free(s_timestamps);
     s_timestamps = NULL;
@@ -60,25 +47,21 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
     clear_cached_timestamps();
     memset(out, 0, sizeof(*out));
 
-    FIL fp;
-    UINT br;
     uint32_t checksum_calc = 0;
     uint32_t checksum_read = 0;
     uint32_t* timestamps = NULL;
 
-    FRESULT fr = f_open(&fp, control_path, FA_READ);
-    if(fr != FR_OK) {
-        ESP_LOGE(TAG, "open %s failed (fr=%d)", control_path, fr);
-        return fr_to_err(fr);
+    FILE* fp = fopen(control_path, "rb");
+    if(!fp) {
+        ESP_LOGE(TAG, "open %s failed (errno=%d)", control_path, errno);
+        return errno == ENOENT ? ESP_ERR_NOT_FOUND : ESP_FAIL;
     }
 
     /* ===== version check ===== */
     uint8_t version_bytes[2];
-    fr = f_read(&fp, version_bytes, 2, &br);
-
-    if(fr != FR_OK || br != 2) {
+    if(fread(version_bytes, 1, sizeof(version_bytes), fp) != sizeof(version_bytes)) {
         ESP_LOGE(TAG, "Failed to read version header");
-        f_close(&fp);
+        fclose(fp);
         return ESP_FAIL;
     }
 
@@ -97,7 +80,7 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
     /* ===== PCA9955B enable flags ===== */
     for(int i = 0; i < LD_BOARD_PCA9955B_CH_NUM; i++) {
         uint8_t v;
-        if(f_read(&fp, &v, 1, &br) != FR_OK || br != 1) {
+        if(fread(&v, 1, 1, fp) != 1) {
             goto io_fail;
         }
         checksum_add_u8(&checksum_calc, v);
@@ -112,7 +95,7 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
     /* ===== WS2812B strip LED counts ===== */
     for(int i = 0; i < LD_BOARD_WS2812B_NUM; i++) {
         uint8_t v;
-        if(f_read(&fp, &v, 1, &br) != FR_OK || br != 1) {
+        if(fread(&v, 1, 1, fp) != 1) {
             goto io_fail;
         }
         checksum_add_u8(&checksum_calc, v);
@@ -126,7 +109,7 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
 
     /* ===== frame_num ===== */
     uint32_t frame_num;
-    if(f_read(&fp, &frame_num, 4, &br) != FR_OK || br != 4) {
+    if(fread(&frame_num, 1, sizeof(frame_num), fp) != sizeof(frame_num)) {
         goto io_fail;
     }
 
@@ -136,7 +119,7 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
         timestamps = (uint32_t*)malloc(frame_num * sizeof(uint32_t));
         if(!timestamps) {
             ESP_LOGE(TAG, "no memory for %lu timestamps", (unsigned long)frame_num);
-            f_close(&fp);
+            fclose(fp);
             memset(out, 0, sizeof(*out));
             return ESP_ERR_NO_MEM;
         }
@@ -145,16 +128,15 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
     /* ===== timestamps ===== */
     for(uint32_t i = 0; i < frame_num; i++) {
         uint32_t timestamp;
-        if(f_read(&fp, &timestamp, 4, &br) != FR_OK || br != 4) {
+        if(fread(&timestamp, 1, sizeof(timestamp), fp) != sizeof(timestamp)) {
             goto io_fail;
         }
         checksum_add_u32(&checksum_calc, timestamp);
         timestamps[i] = timestamp;
     }
 
-
     /* ===== checksum ===== */
-    if(f_read(&fp, &checksum_read, 4, &br) != FR_OK || br != 4) {
+    if(fread(&checksum_read, 1, sizeof(checksum_read), fp) != sizeof(checksum_read)) {
         goto io_fail;
     }
 
@@ -162,12 +144,12 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
     if(checksum_read != checksum_calc) {
         ESP_LOGE(TAG, "checksum mismatch! read=%lu calculated=%lu", (unsigned long)checksum_read, (unsigned long)checksum_calc);
         free(timestamps);
-        f_close(&fp);
+        fclose(fp);
         memset(out, 0, sizeof(*out));
         return ESP_ERR_INVALID_CRC;
     }
 
-    f_close(&fp);
+    fclose(fp);
     s_timestamps = timestamps;
     s_frame_num = frame_num;
     s_timeline_loaded = true;
@@ -175,11 +157,7 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
     if(frame_num == 0) {
         ESP_LOGI(TAG, "timeline loaded: frame_num=0");
     } else {
-        ESP_LOGI(TAG,
-                 "timeline loaded: frame_num=%lu first_ts=%lu last_ts=%lu",
-                 (unsigned long)frame_num,
-                 (unsigned long)s_timestamps[0],
-                 (unsigned long)s_timestamps[frame_num - 1U]);
+        ESP_LOGI(TAG, "timeline loaded: frame_num=%lu first_ts=%lu last_ts=%lu", (unsigned long)frame_num, (unsigned long)s_timestamps[0], (unsigned long)s_timestamps[frame_num - 1U]);
     }
     ESP_LOGI(TAG, "channel info loaded, checksum OK");
     return ESP_OK;
@@ -188,21 +166,21 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
 io_fail:
     ESP_LOGE(TAG, "I/O error while reading %s", control_path);
     free(timestamps);
-    f_close(&fp);
+    fclose(fp);
     memset(out, 0, sizeof(*out));
     return ESP_FAIL;
 
 fmt_fail:
     ESP_LOGE(TAG, "format error in %s", control_path);
     free(timestamps);
-    f_close(&fp);
+    fclose(fp);
     memset(out, 0, sizeof(*out));
     return ESP_ERR_INVALID_RESPONSE;
 
 version_fail:
     ESP_LOGE(TAG, "Version mismatch! Expected %d.%d, got %d.%d", EXPECTED_VERSION_MAJOR, EXPECTED_VERSION_MINOR, major, minor);
     free(timestamps);
-    f_close(&fp);
+    fclose(fp);
     memset(out, 0, sizeof(*out));
     return ESP_FAIL;
 }

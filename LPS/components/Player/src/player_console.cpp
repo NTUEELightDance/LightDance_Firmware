@@ -1,8 +1,12 @@
+#include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "esp_console.h"
 #include "esp_log.h"
+#include "ld_nvs.h"
 
 #include "player.hpp"
 
@@ -103,6 +107,61 @@ static int cmd_test(int argc, char** argv) {
     return 0;
 }
 
+static int cmd_nvs(int argc, char** argv) {
+    if(argc < 2) {
+        printf("Usage: nvs set <key> <value>\n");
+        printf("       nvs get <key>\n");
+        return 1;
+    }
+
+    if(strcmp(argv[1], "set") == 0) {
+        if(argc != 4) {
+            printf("Usage: nvs set <key> <value>\n");
+            return 1;
+        }
+
+        errno = 0;
+        char* end = NULL;
+        unsigned long parsed = strtoul(argv[3], &end, 0);
+        if(errno != 0 || end == argv[3] || *end != '\0' || parsed > UINT8_MAX) {
+            printf("Invalid value: %s (expected 0..255)\n", argv[3]);
+            return 1;
+        }
+
+        const char* key = strcmp(argv[2], "id") == 0 ? LD_NVS_KEY_PLAYER_ID : argv[2];
+        esp_err_t err = ld_nvs_set_u8(key, (uint8_t)parsed);
+        if(err != ESP_OK) {
+            printf("NVS set failed: %s\n", esp_err_to_name(err));
+            return 1;
+        }
+
+        printf("%s = %lu\n", key, parsed);
+        return 0;
+    }
+
+    if(strcmp(argv[1], "get") == 0) {
+        if(argc != 3) {
+            printf("Usage: nvs get <key>\n");
+            return 1;
+        }
+
+        const char* key = strcmp(argv[2], "id") == 0 ? LD_NVS_KEY_PLAYER_ID : argv[2];
+        uint8_t value = 0;
+        esp_err_t err = ld_nvs_get_u8(key, &value);
+        if(err != ESP_OK) {
+            printf("NVS get failed: %s\n", esp_err_to_name(err));
+            return 1;
+        }
+
+        printf("%s = %u\n", key, (unsigned)value);
+        return 0;
+    }
+
+    printf("Unknown NVS operation: %s\n", argv[1]);
+    printf("Usage: nvs set <key> <value> | nvs get <key>\n");
+    return 1;
+}
+
 /* ================= register commands ================= */
 
 static void register_cmd(const char* name, const char* help, esp_console_cmd_func_t func) {
@@ -127,6 +186,7 @@ static void register_all_commands(void) {
     register_cmd("test", "test rgb output", &cmd_test);
     register_cmd("exit", "exit player", &cmd_exit);
     register_cmd("seek", "seek time", &cmd_seek);
+    register_cmd("nvs", "NVS u8: nvs set <key> <value> | nvs get <key>", &cmd_nvs);
 }
 
 /* ================= console entry ================= */
@@ -135,7 +195,7 @@ void console_test(void) {
     ESP_LOGI(TAG, "starting console");
 
     repl_config.prompt = PROMPT_STR ">";
-    repl_config.max_cmdline_length = 1024;
+    repl_config.max_cmdline_length = 256;
 
     esp_console_register_help_command();
     register_all_commands();

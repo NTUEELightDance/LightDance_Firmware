@@ -39,7 +39,10 @@ esp_err_t PlayerMetronome::init(TaskHandle_t _task, uint32_t _period_us) {
                                      .resolution_hz = LD_CFG_PLAYER_GPTIMER_RESOLUTION_HZ,  // Resolution is 1 MHz, i.e., 1 tick equals 1 microsecond
 
                                      .intr_priority = 0,
-                                     .flags = {.intr_shared = 0, .allow_pd = 0, .backup_before_sleep = 0}};
+                                     .flags = {
+                                         .intr_shared = 0,
+                                         .allow_pd = 0,
+                                     }};
 
     esp_err_t ret;
     ret = gptimer_new_timer(&timer_config, &timer);
