@@ -5,7 +5,7 @@
 #include "esp_timer.h"
 #include "ld_config.h"
 
-static const char* TAG = "PlayerClock";
+static const char* TAG = "PLAYER_CLOCK";
 
 PlayerMetronome::PlayerMetronome() {}
 
@@ -29,7 +29,7 @@ esp_err_t PlayerMetronome::init(TaskHandle_t _task, uint32_t _period_us) {
         return ESP_OK;
     }
 
-    ESP_RETURN_ON_FALSE(_task != nullptr && _period_us > 0, ESP_ERR_INVALID_ARG, TAG, "invalid task or period");
+    ESP_RETURN_ON_FALSE(_task != nullptr && _period_us > 0, ESP_ERR_INVALID_ARG, TAG, "metronome initialization rejected: task=%p period_us=%lu", (void*)_task, (unsigned long)_period_us);
 
     task = _task;
     period_us = _period_us;
@@ -46,13 +46,14 @@ esp_err_t PlayerMetronome::init(TaskHandle_t _task, uint32_t _period_us) {
 
     esp_err_t ret;
     ret = gptimer_new_timer(&timer_config, &timer);
-    ESP_RETURN_ON_ERROR(ret, TAG, "new timer failed");
+    ESP_RETURN_ON_ERROR(ret, TAG, "GPTimer creation failed: resolution_hz=%lu", (unsigned long)LD_CFG_PLAYER_GPTIMER_RESOLUTION_HZ);
 
     gptimer_event_callbacks_t cbs = {
         .on_alarm = timer_on_alarm_cb,  // Call the user callback function when the alarm event occurs
     };
     ret = gptimer_register_event_callbacks(timer, &cbs, task);
     if(ret != ESP_OK) {
+        ESP_LOGE(TAG, "GPTimer callback registration failed: %s", esp_err_to_name(ret));
         deinit();
         return ret;
     }
@@ -68,12 +69,14 @@ esp_err_t PlayerMetronome::init(TaskHandle_t _task, uint32_t _period_us) {
 
     ret = gptimer_set_alarm_action(timer, &alarm_cfg);
     if(ret != ESP_OK) {
+        ESP_LOGE(TAG, "GPTimer alarm configuration failed: period_us=%lu err=%s", (unsigned long)period_us, esp_err_to_name(ret));
         deinit();
         return ret;
     }
 
     ret = gptimer_enable(timer);
     if(ret != ESP_OK) {
+        ESP_LOGE(TAG, "GPTimer enable failed: %s", esp_err_to_name(ret));
         deinit();
         return ret;
     }
@@ -92,12 +95,12 @@ esp_err_t PlayerMetronome::deinit() {
     if(timer) {
         esp_err_t ret = gptimer_disable(timer);
         if(ret != ESP_OK) {
-            ESP_LOGE(TAG, "gptimer_disable failed: %s", esp_err_to_name(ret));
+            ESP_LOGE(TAG, "GPTimer disable failed during deinitialization: %s", esp_err_to_name(ret));
             return ret;
         }
         ret = gptimer_del_timer(timer);
         if(ret != ESP_OK) {
-            ESP_LOGE(TAG, "gptimer_del_timer failed: %s", esp_err_to_name(ret));
+            ESP_LOGE(TAG, "GPTimer deletion failed during deinitialization: %s", esp_err_to_name(ret));
             return ret;
         }
         timer = nullptr;
@@ -111,14 +114,14 @@ esp_err_t PlayerMetronome::deinit() {
 }
 
 esp_err_t PlayerMetronome::start() {
-    ESP_RETURN_ON_FALSE(state != MetronomeState::UNINIT, ESP_ERR_INVALID_STATE, TAG, "start before init");
+    ESP_RETURN_ON_FALSE(state != MetronomeState::UNINIT, ESP_ERR_INVALID_STATE, TAG, "metronome start rejected: timer is not initialized");
 
     if(state == MetronomeState::RUNNING) {
         return ESP_OK;
     }
 
     esp_err_t ret = gptimer_start(timer);
-    ESP_RETURN_ON_ERROR(ret, TAG, "gptimer_start failed");
+    ESP_RETURN_ON_ERROR(ret, TAG, "GPTimer start failed");
 
     state = MetronomeState::RUNNING;
     return ESP_OK;
@@ -130,7 +133,7 @@ esp_err_t PlayerMetronome::stop() {
     }
 
     esp_err_t ret = gptimer_stop(timer);
-    ESP_RETURN_ON_ERROR(ret, TAG, "gptimer_stop failed");
+    ESP_RETURN_ON_ERROR(ret, TAG, "GPTimer stop failed");
 
     state = MetronomeState::STOPPED;
 
@@ -138,7 +141,7 @@ esp_err_t PlayerMetronome::stop() {
 }
 
 esp_err_t PlayerMetronome::reset() {
-    ESP_RETURN_ON_FALSE(state != MetronomeState::UNINIT, ESP_ERR_INVALID_STATE, TAG, "reset before init");
+    ESP_RETURN_ON_FALSE(state != MetronomeState::UNINIT, ESP_ERR_INVALID_STATE, TAG, "metronome reset rejected: timer is not initialized");
 
     stop();
     gptimer_set_raw_count(timer, 0);
@@ -147,8 +150,8 @@ esp_err_t PlayerMetronome::reset() {
 }
 
 esp_err_t PlayerMetronome::set_period_us(uint32_t new_period_us) {
-    ESP_RETURN_ON_FALSE(state != MetronomeState::UNINIT, ESP_ERR_INVALID_STATE, TAG, "set_period before init");
-    ESP_RETURN_ON_FALSE(new_period_us > 0, ESP_ERR_INVALID_ARG, TAG, "invalid period");
+    ESP_RETURN_ON_FALSE(state != MetronomeState::UNINIT, ESP_ERR_INVALID_STATE, TAG, "period update rejected: metronome is not initialized");
+    ESP_RETURN_ON_FALSE(new_period_us > 0, ESP_ERR_INVALID_ARG, TAG, "period update rejected: period_us must be greater than zero");
 
     bool was_running = (state == MetronomeState::RUNNING);
 
@@ -171,11 +174,11 @@ esp_err_t PlayerMetronome::set_period_us(uint32_t new_period_us) {
     };
 
     esp_err_t ret = gptimer_set_alarm_action(timer, &alarm_config);
-    ESP_RETURN_ON_ERROR(ret, TAG, "set alarm failed");
+    ESP_RETURN_ON_ERROR(ret, TAG, "GPTimer alarm update failed: period_us=%lu", (unsigned long)new_period_us);
 
     if(was_running) {
         ret = start();
-        ESP_RETURN_ON_ERROR(ret, TAG, "restart failed");
+        ESP_RETURN_ON_ERROR(ret, TAG, "metronome restart failed after period update");
     }
 
     return ESP_OK;
@@ -201,7 +204,7 @@ esp_err_t PlayerClock::init(bool _with_metronome, TaskHandle_t task, uint32_t pe
     with_metronome = _with_metronome;
 
     if(with_metronome) {
-        ESP_RETURN_ON_FALSE(task != nullptr && period_us > 0, ESP_ERR_INVALID_ARG, TAG, "invalid metronome args");
+        ESP_RETURN_ON_FALSE(task != nullptr && period_us > 0, ESP_ERR_INVALID_ARG, TAG, "clock initialization rejected: task=%p metronome_period_us=%lu", (void*)task, (unsigned long)period_us);
 
         esp_err_t ret = metronome.init(task, period_us);
         if(ret != ESP_OK) {
@@ -223,7 +226,7 @@ esp_err_t PlayerClock::deinit() {
     if(with_metronome) {
         esp_err_t ret = metronome.deinit();
         if(ret != ESP_OK) {
-            ESP_LOGE(TAG, "metronome deinit failed: %s", esp_err_to_name(ret));
+            ESP_LOGE(TAG, "clock deinitialization failed while stopping the metronome: %s", esp_err_to_name(ret));
             return ret;
         }
     }
@@ -236,7 +239,7 @@ esp_err_t PlayerClock::deinit() {
 }
 
 esp_err_t PlayerClock::start() {
-    ESP_RETURN_ON_FALSE(state != ClockState::UNINIT, ESP_ERR_INVALID_STATE, TAG, "start before init");
+    ESP_RETURN_ON_FALSE(state != ClockState::UNINIT, ESP_ERR_INVALID_STATE, TAG, "clock start rejected: clock is not initialized");
 
     if(state == ClockState::RUNNING) {
         return ESP_OK;
@@ -257,7 +260,7 @@ esp_err_t PlayerClock::start() {
 }
 
 esp_err_t PlayerClock::pause() {
-    ESP_RETURN_ON_FALSE(state != ClockState::UNINIT, ESP_ERR_INVALID_STATE, TAG, "pause before init");
+    ESP_RETURN_ON_FALSE(state != ClockState::UNINIT, ESP_ERR_INVALID_STATE, TAG, "clock pause rejected: clock is not initialized");
     if(state != ClockState::RUNNING) {
         return ESP_OK;
     }
@@ -274,7 +277,7 @@ esp_err_t PlayerClock::pause() {
 }
 
 esp_err_t PlayerClock::reset() {
-    ESP_RETURN_ON_FALSE(state != ClockState::UNINIT, ESP_ERR_INVALID_STATE, TAG, "reset before init");
+    ESP_RETURN_ON_FALSE(state != ClockState::UNINIT, ESP_ERR_INVALID_STATE, TAG, "clock reset rejected: clock is not initialized");
 
     accumulated_us = 0;
 
@@ -292,9 +295,9 @@ esp_err_t PlayerClock::reset() {
 }
 
 esp_err_t PlayerClock::set_time_us(int64_t target_us) {
-    ESP_RETURN_ON_FALSE(state != ClockState::UNINIT, ESP_ERR_INVALID_STATE, TAG, "set time before init");
+    ESP_RETURN_ON_FALSE(state != ClockState::UNINIT, ESP_ERR_INVALID_STATE, TAG, "clock seek rejected: clock is not initialized");
 
-    ESP_RETURN_ON_FALSE(state == ClockState::PAUSED || state == ClockState::STOPPED, ESP_ERR_INVALID_STATE, TAG, "please stop/pause the clock first");
+    ESP_RETURN_ON_FALSE(state == ClockState::PAUSED || state == ClockState::STOPPED, ESP_ERR_INVALID_STATE, TAG, "clock seek rejected: clock must be paused or stopped current_state=%d", (int)state);
 
     accumulated_us = target_us;
     last_start_us = esp_timer_get_time();

@@ -12,12 +12,12 @@ static const uint8_t EXPECTED_VERSION_MAJOR = 1;
 static const uint8_t EXPECTED_VERSION_MINOR = 2;
 
 #define FRAME_RAW_MAX_SIZE 8192
-#define CHECKSUM_SIZE 4  // uint8 (reserved)          
+#define CHECKSUM_SIZE 4  // uint8 (reserved)
 #define FRAME_FILE_HEADER_SIZE 2U
 
 /* ================= static ================= */
 
-static const char* TAG = "frame_reader";
+static const char* TAG = "FRAME_READER";
 
 static FILE* fp = NULL;
 static bool opened = false;
@@ -32,8 +32,8 @@ static inline void checksum_add_u8(uint32_t* sum, uint8_t b) {
 /* ================= init / deinit ================= */
 
 esp_err_t frame_reader_init(const char* path) {
-    if(!path){
-        ESP_LOGE(TAG, "path is NULL");
+    if(!path) {
+        ESP_LOGE(TAG, "frame reader initialization rejected: path is NULL");
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -50,7 +50,7 @@ esp_err_t frame_reader_init(const char* path) {
         led_cnt += ch_info_snapshot.rmt_strips[i];
 
     if(of_cnt == 0 && led_cnt == 0) {
-        ESP_LOGE(TAG, "ch_info empty (no OF, no LED)");
+        ESP_LOGE(TAG, "frame reader initialization failed: channel configuration has no enabled LED outputs");
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -58,7 +58,7 @@ esp_err_t frame_reader_init(const char* path) {
 
     fp = fopen(path, "rb");
     if(!fp) {
-        ESP_LOGE(TAG, "open %s failed (errno=%d)", path, errno);
+        ESP_LOGE(TAG, "frame file open failed: path=%s errno=%d (%s)", path, errno, strerror(errno));
         return errno == ENOENT ? ESP_ERR_NOT_FOUND : ESP_FAIL;
     }
 
@@ -66,24 +66,23 @@ esp_err_t frame_reader_init(const char* path) {
 
     uint8_t version_bytes[2];
     if(fread(version_bytes, 1, sizeof(version_bytes), fp) != sizeof(version_bytes)) {
-        ESP_LOGE(TAG, "Failed to read version header");
+        ESP_LOGE(TAG, "frame file version header is missing or truncated: path=%s", path);
         fclose(fp);
         fp = NULL;
         return ESP_FAIL;
     }
-    
+
     uint8_t major = version_bytes[0];
     uint8_t minor = version_bytes[1];
-    
+
     if(major != EXPECTED_VERSION_MAJOR || minor != EXPECTED_VERSION_MINOR) {
-        ESP_LOGE(TAG, "Version mismatch! Expected %d.%d, got %d.%d", 
-                 EXPECTED_VERSION_MAJOR, EXPECTED_VERSION_MINOR, major, minor);
+        ESP_LOGE(TAG, "unsupported frame file version: path=%s expected=%u.%u actual=%u.%u", path, EXPECTED_VERSION_MAJOR, EXPECTED_VERSION_MINOR, major, minor);
         fclose(fp);
         fp = NULL;
         return ESP_FAIL;
     }
-    
-    ESP_LOGI(TAG, "frame.dat version: %d.%d (OK)", major, minor);
+
+    ESP_LOGD(TAG, "frame file version accepted: path=%s version=%u.%u", path, major, minor);
 
     /* -------- calculate frame size  -------- */
 
@@ -94,7 +93,12 @@ esp_err_t frame_reader_init(const char* path) {
                    CHECKSUM_SIZE;  /* checksum */
 
     if(g_frame_size > FRAME_RAW_MAX_SIZE) {
-        ESP_LOGE(TAG, "frame_size %u exceeds max", (unsigned)g_frame_size);
+        ESP_LOGE(TAG,
+                 "calculated frame size exceeds reader buffer: frame_size=%u maximum=%u pca_pixels=%u ws_pixels=%u",
+                 (unsigned)g_frame_size,
+                 (unsigned)FRAME_RAW_MAX_SIZE,
+                 (unsigned)of_cnt,
+                 (unsigned)led_cnt);
         fclose(fp);
         fp = NULL;
         return ESP_ERR_INVALID_SIZE;
@@ -102,7 +106,7 @@ esp_err_t frame_reader_init(const char* path) {
 
     opened = true;
 
-    ESP_LOGI(TAG, "frame_reader init: frame_size=%u (OF=%u LED=%u)", (unsigned)g_frame_size, (unsigned)of_cnt, (unsigned)led_cnt);
+    ESP_LOGI(TAG, "frame file ready: path=%s frame_size=%u bytes pca_pixels=%u ws_pixels=%u", path, (unsigned)g_frame_size, (unsigned)of_cnt, (unsigned)led_cnt);
 
     return ESP_OK;
 }
@@ -114,6 +118,7 @@ void frame_reader_deinit(void) {
     fclose(fp);
     fp = NULL;
     opened = false;
+    ESP_LOGD(TAG, "frame file closed");
 }
 
 esp_err_t frame_reader_reset(void) {
@@ -121,14 +126,18 @@ esp_err_t frame_reader_reset(void) {
 }
 
 esp_err_t frame_reader_seek(uint32_t frame_idx) {
-    if(!opened){
-        ESP_LOGE(TAG, "frame_reader not opened");
+    if(!opened) {
+        ESP_LOGE(TAG, "seek rejected: frame file is not open");
         return ESP_ERR_INVALID_STATE;
     }
 
     long offset = (long)FRAME_FILE_HEADER_SIZE + ((long)frame_idx * (long)g_frame_size);
-    if(fseek(fp, offset, SEEK_SET) != 0)
+    if(fseek(fp, offset, SEEK_SET) != 0) {
+        ESP_LOGE(TAG, "frame seek failed: frame_index=%lu file_offset=%ld errno=%d (%s)", (unsigned long)frame_idx, offset, errno, strerror(errno));
         return ESP_FAIL;
+    }
+
+    ESP_LOGD(TAG, "frame seek completed: frame_index=%lu file_offset=%ld", (unsigned long)frame_idx, offset);
 
     return ESP_OK;
 }
@@ -144,12 +153,14 @@ esp_err_t frame_reader_read(table_frame_t* out) {
     // ESP_LOGE(TAG, "ch_info changed after init");
     // return ESP_FAIL;
     // }
-    if(!opened){
-        ESP_LOGE(TAG, "frame_reader not opened");
+    if(!opened) {
+        ESP_LOGE(TAG, "frame read rejected: frame file is not open");
         return ESP_ERR_INVALID_STATE;
     }
-    if(!out)
+    if(!out) {
+        ESP_LOGE(TAG, "frame read rejected: output pointer is NULL");
         return ESP_ERR_INVALID_ARG;
+    }
 
     static uint8_t raw[FRAME_RAW_MAX_SIZE];
 
@@ -158,19 +169,18 @@ esp_err_t frame_reader_read(table_frame_t* out) {
     size_t br = fread(raw, 1, g_frame_size, fp);
 
     /* 1) FatFs 回錯：I/O error，不是 EOF */
-    if (ferror(fp)) {
-        ESP_LOGE(TAG, "fread failed (errno=%d br=%u)", errno, (unsigned)br);
+    if(ferror(fp)) {
+        ESP_LOGE(TAG, "frame file read failed: requested=%u bytes received=%u bytes errno=%d (%s)", (unsigned)g_frame_size, (unsigned)br, errno, strerror(errno));
         return ESP_FAIL;  // 或 ESP_ERR_INVALID_STATE / 你自訂 IO err
     }
 
     /* 2) fr OK 但 br 不足：分成 EOF 與 truncated/corrupt */
-    if (br != g_frame_size) {
-        if (br == 0) {
-            return ESP_ERR_NOT_FOUND;     // 你目前用 NOT_FOUND 當 EOF（沿用）
+    if(br != g_frame_size) {
+        if(br == 0) {
+            return ESP_ERR_NOT_FOUND;  // 你目前用 NOT_FOUND 當 EOF（沿用）
         }
-        ESP_LOGE(TAG, "incomplete frame: need=%u got=%u",
-                (unsigned)g_frame_size, (unsigned)br);
-        return ESP_ERR_INVALID_SIZE;      // 檔案截斷/損壞
+        ESP_LOGE(TAG, "truncated frame: expected=%u bytes received=%u bytes", (unsigned)g_frame_size, (unsigned)br);
+        return ESP_ERR_INVALID_SIZE;  // 檔案截斷/損壞
     }
 
     uint8_t* p = raw;
@@ -239,14 +249,14 @@ esp_err_t frame_reader_read(table_frame_t* out) {
 
     p += CHECKSUM_SIZE;
 
-    if(read_checksum != sum){
-        ESP_LOGE(TAG, "checksum mismatch. read=%u calculate=%u", read_checksum, sum);
+    if(read_checksum != sum) {
+        ESP_LOGE(TAG, "frame checksum mismatch: timestamp_ms=%lu stored=%lu calculated=%lu", (unsigned long)out->timestamp, (unsigned long)read_checksum, (unsigned long)sum);
         return ESP_ERR_INVALID_CRC;
     }
 
     /* -------- final guard -------- */
     if((uint32_t)(p - raw) != g_frame_size) {
-        ESP_LOGE(TAG, "frame consume mismatch used=%u size=%u", (unsigned)(p - raw), (unsigned)g_frame_size);
+        ESP_LOGE(TAG, "frame parser consumed an unexpected byte count: consumed=%u expected=%u", (unsigned)(p - raw), (unsigned)g_frame_size);
         return ESP_FAIL;
     }
 

@@ -5,7 +5,7 @@
 #include "esp_log.h"
 #include "readframe.h"
 
-static const char* TAG = "fb";
+static const char* TAG = "FRAMEBUFFER";
 
 static int count = 0;
 
@@ -171,7 +171,7 @@ void FrameBuffer::fill(grb8_t color) {
 
 FbComputeStatus FrameBuffer::handle_frames(uint64_t time_ms) {
     if(current == nullptr || next == nullptr) {
-        ESP_LOGE(TAG, "FrameBuffer not initialized");
+        ESP_LOGE(TAG, "frame computation rejected: current or next frame pointer is NULL");
         return FbComputeStatus::ERROR_GENERAL;
     }
 
@@ -189,33 +189,33 @@ FbComputeStatus FrameBuffer::handle_frames(uint64_t time_ms) {
             buffer = current->data;
             if(!eof_reported_) {
                 eof_reported_ = true;
-                ESP_LOGI(TAG, "end");
+                ESP_LOGI(TAG, "playback reached end of frame stream: last_timestamp_ms=%" PRIu64, current->timestamp);
                 return FbComputeStatus::EOF_REACHED;
             }
             return FbComputeStatus::HOLD;
         }
         if(err == ESP_ERR_INVALID_SIZE) {
-            ESP_LOGE(TAG, "read_frame failed: %s", esp_err_to_name(err));
+            ESP_LOGE(TAG, "next frame is truncated; holding current frame: playback_ms=%" PRIu64 " current_timestamp_ms=%" PRIu64 " err=%s", time_ms, current->timestamp, esp_err_to_name(err));
             buffer = current->data;
             return FbComputeStatus::ERROR_GENERAL;
         }
         if(err == ESP_ERR_INVALID_ARG) {
-            ESP_LOGE(TAG, "read_frame failed: %s", esp_err_to_name(err));
+            ESP_LOGE(TAG, "next frame read was rejected; holding current frame: playback_ms=%" PRIu64 " err=%s", time_ms, esp_err_to_name(err));
             buffer = current->data;
             return FbComputeStatus::ERROR_GENERAL;
         }
         if(err == ESP_ERR_INVALID_CRC) {
-            ESP_LOGE(TAG, "read_frame failed: %s", esp_err_to_name(err));
+            ESP_LOGE(TAG, "next frame checksum is invalid; holding current frame: playback_ms=%" PRIu64 " current_timestamp_ms=%" PRIu64, time_ms, current->timestamp);
             buffer = current->data;
             return FbComputeStatus::ERROR_GENERAL;
         }
         if(err == ESP_FAIL) {
-            ESP_LOGE(TAG, "read_frame failed: %s", esp_err_to_name(err));
+            ESP_LOGE(TAG, "next frame read failed after an I/O error; playback must stop: playback_ms=%" PRIu64, time_ms);
             buffer = current->data;
             return FbComputeStatus::ERROR_CRITICAL;
         }
         if(err == ESP_ERR_INVALID_STATE) {
-            ESP_LOGE(TAG, "read_frame failed: %s", esp_err_to_name(err));
+            ESP_LOGE(TAG, "next frame is unavailable because the reader is not running; holding current frame: playback_ms=%" PRIu64, time_ms);
             buffer = current->data;
             return FbComputeStatus::ERROR_GENERAL;
         }
@@ -225,7 +225,7 @@ FbComputeStatus FrameBuffer::handle_frames(uint64_t time_ms) {
 #endif
 
         if(next->timestamp <= current->timestamp) {
-            ESP_LOGE(TAG, "Non-monotonic timestamp: current=%" PRIu64 ", next=%" PRIu64, current->timestamp, next->timestamp);
+            ESP_LOGE(TAG, "frame timestamps are not strictly increasing: current_ms=%" PRIu64 " next_ms=%" PRIu64, current->timestamp, next->timestamp);
             buffer = current->data;
             return FbComputeStatus::ERROR_GENERAL;
         }
@@ -275,15 +275,13 @@ frame_data* FrameBuffer::get_buffer() {
 }
 
 void print_table_frame(const table_frame_t& frame) {
-    ESP_LOGI(TAG, "=== table_frame_t ===");
-    ESP_LOGI(TAG, "timestamp : %" PRIu64 " ms", frame.timestamp);
-    ESP_LOGI(TAG, "fade      : %s", frame.fade ? "true" : "false");
+    ESP_LOGD(TAG, "frame dump started: timestamp_ms=%" PRIu64 " fade=%s", frame.timestamp, frame.fade ? "true" : "false");
     print_frame_data(frame.data);
-    ESP_LOGI(TAG, "=====================");
+    ESP_LOGD(TAG, "frame dump completed");
 }
 
 void print_frame_data(const frame_data& data) {
-    ESP_LOGI(TAG, "[WS2812]");
+    ESP_LOGV(TAG, "WS2812B frame data:");
     for(int ch = 0; ch < LD_BOARD_WS2812B_NUM; ch++) {
         int len = ch_info.rmt_strips[ch];
 
@@ -294,20 +292,20 @@ void print_frame_data(const frame_data& data) {
 
         int dump = (len > LD_CFG_PLAYER_DEBUG_DUMP_PIXELS) ? LD_CFG_PLAYER_DEBUG_DUMP_PIXELS : len;
 
-        ESP_LOGI(TAG, "  CH %d (len=%d):", ch, len);
+        ESP_LOGV(TAG, "  strip=%d pixels=%d", ch, len);
         for(int i = 0; i < dump; i++) {
             const grb8_t& p = data.ws2812b[ch][i];
-            ESP_LOGI(TAG, "    [%d] G=%u R=%u B=%u", i, p.g, p.r, p.b);
+            ESP_LOGV(TAG, "    pixel=%d g=%u r=%u b=%u", i, p.g, p.r, p.b);
         }
         if(dump < len) {
-            ESP_LOGI(TAG, "    ...");
+            ESP_LOGV(TAG, "    omitted_pixels=%d", len - dump);
         }
     }
 
-    ESP_LOGI(TAG, "[PCA9955]");
+    ESP_LOGV(TAG, "PCA9955B frame data:");
     for(int i = 0; i < LD_BOARD_PCA9955B_CH_NUM; i++) {
         const grb8_t& p = data.pca9955b[i];
-        ESP_LOGI(TAG, "  CH %2d: G=%u R=%u B=%u", i, p.g, p.r, p.b);
+        ESP_LOGV(TAG, "  channel=%d g=%u r=%u b=%u", i, p.g, p.r, p.b);
     }
 }
 

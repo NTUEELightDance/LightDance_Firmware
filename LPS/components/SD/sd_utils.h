@@ -22,4 +22,4 @@ void unmount_spiffs(void);
 }
 #endif
 
-#endif // SPIFFS_UTILS_H
+#endif  // SPIFFS_UTILS_H

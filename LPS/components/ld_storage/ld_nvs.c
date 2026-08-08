@@ -5,7 +5,7 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
-static const char* TAG = "ld_nvs";
+static const char* TAG = "LD_NVS";
 static const char* NVS_NAMESPACE = "ld_config";
 static const char* NVS_KEY_CONTROL = "ld_control";
 static const char* NVS_KEY_FRAME = "ld_frame";
@@ -15,85 +15,88 @@ esp_err_t ld_nvs_init(void) {
     esp_err_t err = nvs_flash_init();
 
     if(err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_RETURN_ON_ERROR(nvs_flash_erase(), TAG, "failed to erase nvs flash");
+        ESP_LOGW(TAG, "NVS partition requires recovery: %s; erasing partition", esp_err_to_name(err));
+        ESP_RETURN_ON_ERROR(nvs_flash_erase(), TAG, "NVS partition erase failed");
         err = nvs_flash_init();
     }
 
-    ESP_RETURN_ON_ERROR(err, TAG, "failed to init nvs flash");
+    ESP_RETURN_ON_ERROR(err, TAG, "NVS flash initialization failed");
+
+    ESP_LOGI(TAG, "NVS flash ready: namespace=%s", NVS_NAMESPACE);
 
     return ESP_OK;
 }
 
 esp_err_t ld_nvs_set_u8(const char* key, uint8_t val) {
-    ESP_RETURN_ON_FALSE(key != NULL, ESP_ERR_INVALID_ARG, TAG, "key is NULL");
+    ESP_RETURN_ON_FALSE(key != NULL, ESP_ERR_INVALID_ARG, TAG, "set u8 rejected: key is NULL");
 
     nvs_handle_t handle;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-    ESP_RETURN_ON_ERROR(err, TAG, "failed to open nvs namespace");
+    ESP_RETURN_ON_ERROR(err, TAG, "NVS namespace open failed: namespace=%s mode=readwrite", NVS_NAMESPACE);
 
     err = nvs_set_u8(handle, key, val);
     if(err != ESP_OK) {
         nvs_close(handle);
-        ESP_RETURN_ON_ERROR(err, TAG, "failed to set %s", key);
+        ESP_RETURN_ON_ERROR(err, TAG, "NVS value write failed: namespace=%s key=%s", NVS_NAMESPACE, key);
     }
 
     err = nvs_commit(handle);
     nvs_close(handle);
-    ESP_RETURN_ON_ERROR(err, TAG, "failed to commit %s", key);
+    ESP_RETURN_ON_ERROR(err, TAG, "NVS commit failed: namespace=%s key=%s", NVS_NAMESPACE, key);
 
-    ESP_LOGI(TAG, "set %s = %u", key, (unsigned)val);
+    ESP_LOGI(TAG, "value stored: namespace=%s key=%s value=%u", NVS_NAMESPACE, key, (unsigned)val);
 
     return ESP_OK;
 }
 
 esp_err_t ld_nvs_get_u8(const char* key, uint8_t* val) {
-    ESP_RETURN_ON_FALSE(key != NULL, ESP_ERR_INVALID_ARG, TAG, "key is NULL");
-    ESP_RETURN_ON_FALSE(val != NULL, ESP_ERR_INVALID_ARG, TAG, "val is NULL");
+    ESP_RETURN_ON_FALSE(key != NULL, ESP_ERR_INVALID_ARG, TAG, "get u8 rejected: key is NULL");
+    ESP_RETURN_ON_FALSE(val != NULL, ESP_ERR_INVALID_ARG, TAG, "get u8 rejected: output pointer is NULL");
 
     nvs_handle_t handle;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
-    ESP_RETURN_ON_ERROR(err, TAG, "failed to open nvs namespace");
+    ESP_RETURN_ON_ERROR(err, TAG, "NVS namespace open failed: namespace=%s mode=readonly", NVS_NAMESPACE);
 
     err = nvs_get_u8(handle, key, val);
     nvs_close(handle);
-    ESP_RETURN_ON_ERROR(err, TAG, "failed to get %s", key);
+    ESP_RETURN_ON_ERROR(err, TAG, "NVS value read failed: namespace=%s key=%s", NVS_NAMESPACE, key);
 
     return ESP_OK;
 }
 
 static esp_err_t ld_nvs_set_u32(const char* key, uint32_t val) {
-    ESP_RETURN_ON_FALSE(key != NULL, ESP_ERR_INVALID_ARG, TAG, "key is NULL");
+    ESP_RETURN_ON_FALSE(key != NULL, ESP_ERR_INVALID_ARG, TAG, "set u32 rejected: key is NULL");
 
     nvs_handle_t handle;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-    ESP_RETURN_ON_ERROR(err, TAG, "failed to open nvs namespace");
+    ESP_RETURN_ON_ERROR(err, TAG, "NVS namespace open failed: namespace=%s mode=readwrite", NVS_NAMESPACE);
 
     err = nvs_set_u32(handle, key, val);
     if(err != ESP_OK) {
         nvs_close(handle);
-        ESP_RETURN_ON_ERROR(err, TAG, "failed to set %s", key);
+        ESP_RETURN_ON_ERROR(err, TAG, "NVS value write failed: namespace=%s key=%s", NVS_NAMESPACE, key);
     }
 
     err = nvs_commit(handle);
     nvs_close(handle);
-    ESP_RETURN_ON_ERROR(err, TAG, "failed to commit %s", key);
+    ESP_RETURN_ON_ERROR(err, TAG, "NVS commit failed: namespace=%s key=%s", NVS_NAMESPACE, key);
 
-    ESP_LOGI(TAG, "set %s = %lu", key, (unsigned long)val);
+    ESP_LOGI(TAG, "value stored: namespace=%s key=%s value=%lu", NVS_NAMESPACE, key, (unsigned long)val);
 
     return ESP_OK;
 }
 
 static esp_err_t ld_nvs_get_u32(const char* key, uint32_t* val) {
-    ESP_RETURN_ON_FALSE(key != NULL, ESP_ERR_INVALID_ARG, TAG, "key is NULL");
-    ESP_RETURN_ON_FALSE(val != NULL, ESP_ERR_INVALID_ARG, TAG, "val is NULL");
+    ESP_RETURN_ON_FALSE(key != NULL, ESP_ERR_INVALID_ARG, TAG, "get u32 rejected: key is NULL");
+    ESP_RETURN_ON_FALSE(val != NULL, ESP_ERR_INVALID_ARG, TAG, "get u32 rejected: output pointer is NULL");
 
     nvs_handle_t handle;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
-    ESP_RETURN_ON_ERROR(err, TAG, "failed to open nvs namespace");
+    ESP_RETURN_ON_ERROR(err, TAG, "NVS namespace open failed: namespace=%s mode=readonly", NVS_NAMESPACE);
 
     err = nvs_get_u32(handle, key, val);
     nvs_close(handle);
-    ESP_RETURN_ON_ERROR(err, TAG, "failed to get %s", key);
+    ESP_RETURN_ON_ERROR(err, TAG, "NVS value read failed: namespace=%s key=%s", NVS_NAMESPACE, key);
 
     return ESP_OK;
 }

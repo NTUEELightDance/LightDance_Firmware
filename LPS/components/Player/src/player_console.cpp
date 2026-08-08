@@ -16,7 +16,7 @@
 
 /* ================= static state (ONLY HERE) ================= */
 
-static const char* TAG = "console";
+static const char* TAG = "CONSOLE";
 
 static esp_console_repl_t* repl = NULL;
 static esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
@@ -79,11 +79,11 @@ static int cmd_test(int argc, char** argv) {
     int b = atoi(argv[3]);
 
     grb8_t color = grb8(r, g, b);
-    ESP_LOGI("fb", "Original LED: R: %u, G: %u, B: %u", color.r, color.g, color.b);
+    ESP_LOGD(TAG, "test color conversion: stage=input r=%u g=%u b=%u", color.r, color.g, color.b);
     color = grb_gamma_u8(color, LED_WS2812B);
-    ESP_LOGI("fb", "After gamma LED: R: %u, G: %u, B: %u", color.r, color.g, color.b);
+    ESP_LOGD(TAG, "test color conversion: stage=gamma r=%u g=%u b=%u", color.r, color.g, color.b);
     color = grb_set_brightness(color, LED_WS2812B);
-    ESP_LOGI("fb", "After brightness LED: R: %u, G: %u, B: %u", color.r, color.g, color.b);
+    ESP_LOGD(TAG, "test color conversion: stage=brightness r=%u g=%u b=%u", color.r, color.g, color.b);
 
     if(r < 0) {
         r = 0;
@@ -192,7 +192,7 @@ static void register_all_commands(void) {
 /* ================= console entry ================= */
 
 void console_test(void) {
-    ESP_LOGI(TAG, "starting console");
+    ESP_LOGD(TAG, "UART console initialization started");
 
     repl_config.prompt = PROMPT_STR ">";
     repl_config.max_cmdline_length = 256;
@@ -205,4 +205,5 @@ void console_test(void) {
     ESP_ERROR_CHECK(esp_console_new_repl_uart(&hw_config, &repl_config, &repl));
 
     ESP_ERROR_CHECK(esp_console_start_repl(repl));
+    ESP_LOGI(TAG, "UART console ready: prompt=%s>", PROMPT_STR);
 }

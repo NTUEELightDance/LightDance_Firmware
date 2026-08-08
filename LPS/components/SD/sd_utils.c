@@ -8,6 +8,7 @@ static bool g_spiffs_mounted = false;
 
 esp_err_t mount_spiffs(void) {
     if(g_spiffs_mounted) {
+        ESP_LOGD(TAG, "mount skipped: SPIFFS is already mounted");
         return ESP_OK;
     }
 
@@ -20,7 +21,8 @@ esp_err_t mount_spiffs(void) {
 
     esp_err_t ret = esp_vfs_spiffs_register(&config);
     if(ret != ESP_OK) {
-        ESP_LOGE(TAG, "SPIFFS mount failed (%s)", esp_err_to_name(ret));
+        ESP_LOGE(
+            TAG, "mount failed: partition=%s path=%s format_on_failure=%s err=%s", config.partition_label, config.base_path, config.format_if_mount_failed ? "true" : "false", esp_err_to_name(ret));
         return ret;
     }
 
@@ -28,13 +30,13 @@ esp_err_t mount_spiffs(void) {
     size_t used = 0;
     ret = esp_spiffs_info(config.partition_label, &total, &used);
     if(ret != ESP_OK) {
-        ESP_LOGE(TAG, "failed to query SPIFFS usage (%s)", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "usage query failed; unmounting partition=%s: %s", config.partition_label, esp_err_to_name(ret));
         esp_vfs_spiffs_unregister(config.partition_label);
         return ret;
     }
 
     g_spiffs_mounted = true;
-    ESP_LOGI(TAG, "mounted at %s, total=%u, used=%u", config.base_path, (unsigned)total, (unsigned)used);
+    ESP_LOGI(TAG, "mounted: partition=%s path=%s used=%u bytes total=%u bytes", config.partition_label, config.base_path, (unsigned)used, (unsigned)total);
     return ESP_OK;
 }
 
@@ -42,6 +44,6 @@ void unmount_spiffs(void) {
     if(g_spiffs_mounted) {
         esp_vfs_spiffs_unregister("storage");
         g_spiffs_mounted = false;
+        ESP_LOGI(TAG, "unmounted: partition=storage");
     }
 }
-

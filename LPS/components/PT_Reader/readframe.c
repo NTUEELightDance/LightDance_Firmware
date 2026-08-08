@@ -1,6 +1,6 @@
 #include "readframe.h"
-#include "frame_reader.h"
 #include "control_reader.h"
+#include "frame_reader.h"
 
 #include <string.h>
 
@@ -13,7 +13,7 @@
 /* ========================================================= */
 ch_info_t ch_info_snapshot;
 
-static const char* TAG = "READFRAME";
+static const char* TAG = "FRAME_SYSTEM";
 
 /* ================= runtime state ================= */
 
@@ -41,7 +41,7 @@ typedef struct {
     esp_err_t err;
 } frame_status_t;
 
-static volatile frame_status_t g_frame_status = { .err = ESP_OK };
+static volatile frame_status_t g_frame_status = {.err = ESP_OK};
 
 static volatile pt_cmd_t cmd = CMD_NONE;
 static volatile uint32_t cmd_seek_frame_idx = 0;
@@ -142,20 +142,20 @@ static void pt_reader_task(void* arg) {
         g_frame_status.err = err;
 
         if(err == ESP_ERR_NOT_FOUND) {
-            ESP_LOGI(TAG, "EOF reached");
+            ESP_LOGI(TAG, "frame stream reached end of file");
             eof_reached = true;
             xSemaphoreGive(sem_ready);
             continue;
         }
         if(err == ESP_FAIL) {
-            ESP_LOGE(TAG, "I/O error while reading frame");
+            ESP_LOGE(TAG, "frame reader stopped after an unrecoverable I/O error");
             xSemaphoreGive(sem_ready);
-            running = false;    // stop the task loop
+            running = false;  // stop the task loop
             continue;
-         }
+        }
 
         if(err != ESP_OK) {
-            ESP_LOGE(TAG, "frame_reader_read failed: %s", esp_err_to_name(err));
+            ESP_LOGE(TAG, "frame reader entered error state: %s", esp_err_to_name(err));
             has_error = true;
             xSemaphoreGive(sem_ready);
             continue;
@@ -164,7 +164,7 @@ static void pt_reader_task(void* arg) {
         xSemaphoreGive(sem_ready);
     }
 
-    ESP_LOGI(TAG, "pt_reader_task exit");
+    ESP_LOGI(TAG, "frame reader task stopped");
     pt_task = NULL;
     vTaskDelete(NULL);
 }
@@ -175,20 +175,20 @@ esp_err_t frame_system_init(const char* control_path, const char* frame_path) {
     esp_err_t err;
 
     if(inited) {
-        ESP_LOGE(TAG, "frame system already initialized");
+        ESP_LOGW(TAG, "initialization request ignored: frame system is already initialized");
         return ESP_ERR_INVALID_STATE;
     }
 
     err = get_channel_info(control_path, &ch_info);
     if(err != ESP_OK) {
-        ESP_LOGE(TAG, "get_channel_info failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "control file load failed: path=%s err=%s", control_path, esp_err_to_name(err));
         return err;
     }
     ch_info_snapshot = ch_info;
 
     err = frame_reader_init(frame_path);
     if(err != ESP_OK) {
-        ESP_LOGE(TAG, "frame_reader_init failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "frame file initialization failed: path=%s err=%s", frame_path, esp_err_to_name(err));
         control_reader_clear();
         return err;
     }
@@ -197,7 +197,7 @@ esp_err_t frame_system_init(const char* control_path, const char* frame_path) {
     sem_ready = xSemaphoreCreateBinary();
 
     if(!sem_free || !sem_ready) {
-        ESP_LOGE(TAG, "Failed to create semaphores");
+        ESP_LOGE(TAG, "frame buffer semaphore creation failed: free_sem=%s ready_sem=%s", sem_free ? "ok" : "failed", sem_ready ? "ok" : "failed");
         frame_reader_deinit();
         control_reader_clear();
         if(sem_free) {
@@ -221,7 +221,7 @@ esp_err_t frame_system_init(const char* control_path, const char* frame_path) {
     reader_epoch = 0;
 
     if(xTaskCreate(pt_reader_task, "pt_reader", 16384, NULL, 5, &pt_task) != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create pt_reader task");
+        ESP_LOGE(TAG, "frame reader task creation failed: stack_size=16384 priority=5");
         running = false;
         frame_reader_deinit();
         control_reader_clear();
@@ -235,26 +235,26 @@ esp_err_t frame_system_init(const char* control_path, const char* frame_path) {
 
     inited = true;
 
-    ESP_LOGI(TAG, "frame system initialized (new channel_info model)");
+    ESP_LOGI(TAG, "frame system initialized: control_path=%s frame_path=%s", control_path, frame_path);
     return ESP_OK;
 }
 
 esp_err_t read_frame(table_frame_t* playerbuffer) {
     if(!inited) {
-        ESP_LOGE(TAG, "frame system not initialized");
+        ESP_LOGE(TAG, "frame read rejected: frame system is not initialized");
         return ESP_ERR_INVALID_STATE;
     }
     if(!playerbuffer) {
-        ESP_LOGE(TAG, "playerbuffer is NULL");
+        ESP_LOGE(TAG, "frame read rejected: output buffer is NULL");
         return ESP_ERR_INVALID_ARG;
     }
 
     if(xSemaphoreTake(sem_ready, portMAX_DELAY) != pdTRUE) {
-        ESP_LOGE(TAG, "Failed to take sem_ready");
+        ESP_LOGE(TAG, "frame read failed: ready semaphore could not be acquired");
         return ESP_FAIL;
     }
-    if(!running){
-        ESP_LOGE(TAG, "frame system not running");
+    if(!running) {
+        ESP_LOGE(TAG, "frame read failed: reader task is not running");
         return ESP_FAIL;
     }
 
@@ -272,7 +272,7 @@ esp_err_t read_frame(table_frame_t* playerbuffer) {
 
 esp_err_t read_frame_seek(uint64_t time_ms) {
     if(!inited) {
-        ESP_LOGE(TAG, "frame system not initialized");
+        ESP_LOGE(TAG, "seek rejected: frame system is not initialized");
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -282,27 +282,20 @@ esp_err_t read_frame_seek(uint64_t time_ms) {
     uint32_t frame_num = 0;
     esp_err_t err = control_reader_find_seek_frame_idx(time_ms, &frame_idx);
     if(err != ESP_OK) {
-        ESP_LOGE(TAG,
-                 "failed to find seek frame for time=%llu ms: %s",
-                 (unsigned long long)time_ms,
-                 esp_err_to_name(err));
+        ESP_LOGE(TAG, "seek target lookup failed: requested_ms=%llu err=%s", (unsigned long long)time_ms, esp_err_to_name(err));
         return err;
     }
 
     frame_num = control_reader_frame_count();
     err = control_reader_get_timestamp(frame_idx, &current_ts);
     if(err != ESP_OK) {
-        ESP_LOGE(TAG,
-                 "failed to read seek start timestamp at frame_idx=%lu: %s",
-                 (unsigned long)frame_idx,
-                 esp_err_to_name(err));
+        ESP_LOGE(TAG, "seek timestamp lookup failed: frame_index=%lu err=%s", (unsigned long)frame_idx, esp_err_to_name(err));
         return err;
     }
 
-    if((frame_idx + 1U) < frame_num &&
-       control_reader_get_timestamp(frame_idx + 1U, &next_ts) == ESP_OK) {
+    if((frame_idx + 1U) < frame_num && control_reader_get_timestamp(frame_idx + 1U, &next_ts) == ESP_OK) {
         ESP_LOGI(TAG,
-                 "seek time=%llu ms -> frame_num=%lu frame_idx=%lu pair=[%lu, %lu]",
+                 "seek scheduled: requested_ms=%llu frames=%lu frame_index=%lu interval_ms=[%lu,%lu]",
                  (unsigned long long)time_ms,
                  (unsigned long)frame_num,
                  (unsigned long)frame_idx,
@@ -310,7 +303,7 @@ esp_err_t read_frame_seek(uint64_t time_ms) {
                  (unsigned long)next_ts);
     } else {
         ESP_LOGI(TAG,
-                 "seek time=%llu ms -> frame_num=%lu frame_idx=%lu pair=[%lu, EOF]",
+                 "seek scheduled: requested_ms=%llu frames=%lu frame_index=%lu interval_ms=[%lu,EOF]",
                  (unsigned long long)time_ms,
                  (unsigned long)frame_num,
                  (unsigned long)frame_idx,
@@ -322,7 +315,7 @@ esp_err_t read_frame_seek(uint64_t time_ms) {
 
 esp_err_t frame_reset(void) {
     if(!inited) {
-        ESP_LOGE(TAG, "frame system not initialized");
+        ESP_LOGE(TAG, "reset rejected: frame system is not initialized");
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -363,6 +356,8 @@ esp_err_t frame_system_deinit(void) {
     cmd_seek_frame_idx = 0;
     reader_epoch = 0;
     pt_task = NULL;
+
+    ESP_LOGI(TAG, "frame system deinitialized");
 
     return ESP_OK;
 }

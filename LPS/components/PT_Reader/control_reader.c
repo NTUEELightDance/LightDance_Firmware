@@ -8,7 +8,7 @@
 #include "esp_log.h"
 #include "ld_board.h"
 
-static const char* TAG = "control_reader";
+static const char* TAG = "CTRL_READER";
 
 static const uint8_t EXPECTED_VERSION_MAJOR = 1;
 static const uint8_t EXPECTED_VERSION_MINOR = 2;
@@ -53,14 +53,14 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
 
     FILE* fp = fopen(control_path, "rb");
     if(!fp) {
-        ESP_LOGE(TAG, "open %s failed (errno=%d)", control_path, errno);
+        ESP_LOGE(TAG, "control file open failed: path=%s errno=%d (%s)", control_path, errno, strerror(errno));
         return errno == ENOENT ? ESP_ERR_NOT_FOUND : ESP_FAIL;
     }
 
     /* ===== version check ===== */
     uint8_t version_bytes[2];
     if(fread(version_bytes, 1, sizeof(version_bytes), fp) != sizeof(version_bytes)) {
-        ESP_LOGE(TAG, "Failed to read version header");
+        ESP_LOGE(TAG, "control file version header is missing or truncated: path=%s", control_path);
         fclose(fp);
         return ESP_FAIL;
     }
@@ -75,7 +75,7 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
         goto version_fail;
     }
 
-    ESP_LOGI(TAG, "control.dat version: %d.%d (OK)", major, minor);
+    ESP_LOGD(TAG, "control file version accepted: path=%s version=%u.%u", control_path, major, minor);
 
     /* ===== PCA9955B enable flags ===== */
     for(int i = 0; i < LD_BOARD_PCA9955B_CH_NUM; i++) {
@@ -85,7 +85,7 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
         }
         checksum_add_u8(&checksum_calc, v);
         if(v > 1) {
-            ESP_LOGE(TAG, "of_enable[%d]=%u invalid", i, v);
+            ESP_LOGE(TAG, "invalid PCA9955B enable flag: channel=%d value=%u expected=0..1", i, v);
             goto fmt_fail;
         }
 
@@ -100,7 +100,7 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
         }
         checksum_add_u8(&checksum_calc, v);
         if(v > LD_BOARD_WS2812B_MAX_PIXEL_NUM) {
-            ESP_LOGE(TAG, "strip_led_num[%d]=%u > %u", i, v, LD_BOARD_WS2812B_MAX_PIXEL_NUM);
+            ESP_LOGE(TAG, "invalid WS2812B pixel count: strip=%d value=%u maximum=%u", i, v, LD_BOARD_WS2812B_MAX_PIXEL_NUM);
             goto fmt_fail;
         }
 
@@ -118,7 +118,7 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
     if(frame_num > 0) {
         timestamps = (uint32_t*)malloc(frame_num * sizeof(uint32_t));
         if(!timestamps) {
-            ESP_LOGE(TAG, "no memory for %lu timestamps", (unsigned long)frame_num);
+            ESP_LOGE(TAG, "timestamp allocation failed: frames=%lu bytes=%lu", (unsigned long)frame_num, (unsigned long)(frame_num * sizeof(uint32_t)));
             fclose(fp);
             memset(out, 0, sizeof(*out));
             return ESP_ERR_NO_MEM;
@@ -142,7 +142,7 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
 
     /* ===== verify checksum ===== */
     if(checksum_read != checksum_calc) {
-        ESP_LOGE(TAG, "checksum mismatch! read=%lu calculated=%lu", (unsigned long)checksum_read, (unsigned long)checksum_calc);
+        ESP_LOGE(TAG, "control file checksum mismatch: path=%s stored=%lu calculated=%lu", control_path, (unsigned long)checksum_read, (unsigned long)checksum_calc);
         free(timestamps);
         fclose(fp);
         memset(out, 0, sizeof(*out));
@@ -155,30 +155,37 @@ esp_err_t get_channel_info(const char* control_path, ch_info_t* out) {
     s_timeline_loaded = true;
 
     if(frame_num == 0) {
-        ESP_LOGI(TAG, "timeline loaded: frame_num=0");
+        ESP_LOGW(TAG, "control file loaded with an empty timeline: path=%s version=%u.%u", control_path, major, minor);
     } else {
-        ESP_LOGI(TAG, "timeline loaded: frame_num=%lu first_ts=%lu last_ts=%lu", (unsigned long)frame_num, (unsigned long)s_timestamps[0], (unsigned long)s_timestamps[frame_num - 1U]);
+        ESP_LOGI(TAG,
+                 "control file loaded: path=%s version=%u.%u frames=%lu first_timestamp_ms=%lu last_timestamp_ms=%lu",
+                 control_path,
+                 major,
+                 minor,
+                 (unsigned long)frame_num,
+                 (unsigned long)s_timestamps[0],
+                 (unsigned long)s_timestamps[frame_num - 1U]);
     }
-    ESP_LOGI(TAG, "channel info loaded, checksum OK");
+    ESP_LOGD(TAG, "control file checksum verified: value=%lu", (unsigned long)checksum_read);
     return ESP_OK;
     /* ---------------- error paths ---------------- */
 
 io_fail:
-    ESP_LOGE(TAG, "I/O error while reading %s", control_path);
+    ESP_LOGE(TAG, "control file read failed: path=%s errno=%d (%s)", control_path, errno, strerror(errno));
     free(timestamps);
     fclose(fp);
     memset(out, 0, sizeof(*out));
     return ESP_FAIL;
 
 fmt_fail:
-    ESP_LOGE(TAG, "format error in %s", control_path);
+    ESP_LOGD(TAG, "control file rejected because its channel configuration is invalid: path=%s", control_path);
     free(timestamps);
     fclose(fp);
     memset(out, 0, sizeof(*out));
     return ESP_ERR_INVALID_RESPONSE;
 
 version_fail:
-    ESP_LOGE(TAG, "Version mismatch! Expected %d.%d, got %d.%d", EXPECTED_VERSION_MAJOR, EXPECTED_VERSION_MINOR, major, minor);
+    ESP_LOGE(TAG, "unsupported control file version: path=%s expected=%u.%u actual=%u.%u", control_path, EXPECTED_VERSION_MAJOR, EXPECTED_VERSION_MINOR, major, minor);
     free(timestamps);
     fclose(fp);
     memset(out, 0, sizeof(*out));

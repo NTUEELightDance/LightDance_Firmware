@@ -50,12 +50,7 @@ static uint16_t make_cmd_set_evt_mask(uint8_t* buf, uint8_t* evt_mask) {
     return HCI_H4_CMD_PREAMBLE_SIZE + HCIC_PARAM_SIZE_SET_EVENT_MASK;
 }
 
-static uint16_t make_cmd_ble_set_scan_params(uint8_t* buf,
-                                             uint8_t scan_type,
-                                             uint16_t scan_interval,
-                                             uint16_t scan_window,
-                                             uint8_t own_addr_type,
-                                             uint8_t filter_policy) {
+static uint16_t make_cmd_ble_set_scan_params(uint8_t* buf, uint8_t scan_type, uint16_t scan_interval, uint16_t scan_window, uint8_t own_addr_type, uint8_t filter_policy) {
     UINT8_TO_STREAM(buf, H4_TYPE_COMMAND);
     UINT16_TO_STREAM(buf, HCI_BLE_WRITE_SCAN_PARAM);
     UINT8_TO_STREAM(buf, HCIC_PARAM_SIZE_BLE_WRITE_SCAN_PARAM);
@@ -78,13 +73,13 @@ static uint16_t make_cmd_ble_set_scan_enable(uint8_t* buf, uint8_t scan_enable, 
 
 static uint16_t make_cmd_ble_set_adv_data(uint8_t* buf, uint8_t data_len, uint8_t* p_data) {
     UINT8_TO_STREAM(buf, H4_TYPE_COMMAND);
-    UINT16_TO_STREAM(buf, 0x2008); // HCI_BLE_WRITE_ADV_DATA
-    UINT8_TO_STREAM(buf, 32);      // HCI Param Length (Fixed 32)
-    UINT8_TO_STREAM(buf, data_len); // Adv Data Length
+    UINT16_TO_STREAM(buf, 0x2008);   // HCI_BLE_WRITE_ADV_DATA
+    UINT8_TO_STREAM(buf, 32);        // HCI Param Length (Fixed 32)
+    UINT8_TO_STREAM(buf, data_len);  // Adv Data Length
     ARRAY_TO_STREAM(buf, p_data, data_len);
     uint8_t pad_len = 31 - data_len;
-    for (int i = 0; i < pad_len; i++) {
-        UINT8_TO_STREAM(buf, 0); // Padding zeros
+    for(int i = 0; i < pad_len; i++) {
+        UINT8_TO_STREAM(buf, 0);  // Padding zeros
     }
     return HCI_H4_CMD_PREAMBLE_SIZE + 1 + 31;
 }
@@ -141,19 +136,24 @@ void bt_hci_set_ack_adv_params(void) {
     uint16_t interval = 32;
 
     UINT8_TO_STREAM(p, H4_TYPE_COMMAND);
-    UINT16_TO_STREAM(p, 0x2006); // HCI_BLE_WRITE_ADV_PARAMS
+    UINT16_TO_STREAM(p, 0x2006);  // HCI_BLE_WRITE_ADV_PARAMS
     UINT8_TO_STREAM(p, 15);
-    UINT16_TO_STREAM(p, interval); // Min
-    UINT16_TO_STREAM(p, interval); // Max
+    UINT16_TO_STREAM(p, interval);  // Min
+    UINT16_TO_STREAM(p, interval);  // Max
 
     // Use ADV_IND (Type 0)
     UINT8_TO_STREAM(p, 0);
 
-    UINT8_TO_STREAM(p, 0); // Own addr type
-    UINT8_TO_STREAM(p, 0); // Peer addr type
-    UINT8_TO_STREAM(p, 0); UINT8_TO_STREAM(p, 0); UINT8_TO_STREAM(p, 0); UINT8_TO_STREAM(p, 0); UINT8_TO_STREAM(p, 0); UINT8_TO_STREAM(p, 0);
-    UINT8_TO_STREAM(p, 0x07); // Channel Map
-    UINT8_TO_STREAM(p, 0); // Filter Policy
+    UINT8_TO_STREAM(p, 0);  // Own addr type
+    UINT8_TO_STREAM(p, 0);  // Peer addr type
+    UINT8_TO_STREAM(p, 0);
+    UINT8_TO_STREAM(p, 0);
+    UINT8_TO_STREAM(p, 0);
+    UINT8_TO_STREAM(p, 0);
+    UINT8_TO_STREAM(p, 0);
+    UINT8_TO_STREAM(p, 0);
+    UINT8_TO_STREAM(p, 0x07);  // Channel Map
+    UINT8_TO_STREAM(p, 0);     // Filter Policy
 
     esp_vhci_host_send_packet(buf, p - buf);
 }
@@ -168,7 +168,7 @@ void bt_hci_set_adv_enabled(uint8_t enable) {
     uint8_t buf[128];
     uint8_t* p = buf;
     UINT8_TO_STREAM(p, H4_TYPE_COMMAND);
-    UINT16_TO_STREAM(p, 0x200A); // HCI_BLE_WRITE_ADV_ENABLE
+    UINT16_TO_STREAM(p, 0x200A);  // HCI_BLE_WRITE_ADV_ENABLE
     UINT8_TO_STREAM(p, 1);
     UINT8_TO_STREAM(p, enable);
     esp_vhci_host_send_packet(buf, p - buf);

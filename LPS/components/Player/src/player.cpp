@@ -6,7 +6,7 @@
 
 #include "freertos/queue.h"
 
-static const char* TAG = "Player";
+static const char* TAG = "PLAYER";
 
 /* ================= Singleton ================= */
 
@@ -21,7 +21,7 @@ Player::~Player() = default;
 /* ================= Public lifecycle ================= */
 
 esp_err_t Player::init() {
-    ESP_RETURN_ON_FALSE(!taskAlive, ESP_ERR_INVALID_STATE, TAG, "player already started");
+    ESP_RETURN_ON_FALSE(!taskAlive, ESP_ERR_INVALID_STATE, TAG, "initialization rejected: player task is already running");
     return createTask();
 }
 
@@ -88,16 +88,16 @@ esp_err_t Player::exit() {
 }
 
 esp_err_t Player::set_time_us(uint32_t start_time_us) {
-    ESP_RETURN_ON_ERROR(clock.set_time_us(start_time_us), TAG, "Failed to set clock time");
-    ESP_RETURN_ON_ERROR(fb.seek(start_time_us / 1000), TAG, "Failed to seek framebuffer");
+    ESP_RETURN_ON_ERROR(clock.set_time_us(start_time_us), TAG, "clock seek failed: target_us=%lu", (unsigned long)start_time_us);
+    ESP_RETURN_ON_ERROR(fb.seek(start_time_us / 1000), TAG, "framebuffer seek failed: target_ms=%lu", (unsigned long)(start_time_us / 1000));
 
     FbComputeStatus fb_status = fb.compute(start_time_us / 1000);
     if(fb_status == FbComputeStatus::ERROR_GENERAL) {
-        ESP_LOGE(TAG, "framebuffer seek compute general error");
+        ESP_LOGE(TAG, "framebuffer could not compute the seek target: target_us=%lu status=general_error", (unsigned long)start_time_us);
         return ESP_FAIL;
     }
     if(fb_status == FbComputeStatus::ERROR_CRITICAL) {
-        ESP_LOGE(TAG, "framebuffer seek compute critical error");
+        ESP_LOGE(TAG, "framebuffer could not compute the seek target: target_us=%lu status=critical_error", (unsigned long)start_time_us);
         return ESP_FAIL;
     }
 
@@ -122,9 +122,9 @@ esp_err_t Player::pausePlayback() {
 }
 
 esp_err_t Player::resetPlayback() {
-    ESP_RETURN_ON_ERROR(clock.pause(), TAG, "Failed to pause clock");
-    ESP_RETURN_ON_ERROR(clock.reset(), TAG, "Failed to reset clock");
-    ESP_RETURN_ON_ERROR(fb.reset(), TAG, "Failed to reset framebuffer");
+    ESP_RETURN_ON_ERROR(clock.pause(), TAG, "playback reset failed while pausing the clock");
+    ESP_RETURN_ON_ERROR(clock.reset(), TAG, "playback reset failed while resetting the clock");
+    ESP_RETURN_ON_ERROR(fb.reset(), TAG, "playback reset failed while resetting the framebuffer");
     controller.fill(GRB_BLACK);
     controller.show();
 
@@ -136,16 +136,16 @@ esp_err_t Player::updatePlayback() {
 
     FbComputeStatus fb_status = fb.compute(time_ms);
     if(fb_status == FbComputeStatus::ERROR_GENERAL) {
-        ESP_LOGE(TAG, "framebuffer compute general error");
+        ESP_LOGE(TAG, "playback stopped after a recoverable framebuffer error: playback_ms=%llu", (unsigned long long)time_ms);
         Event e{};
         e.type = EVENT_STOP;
-        ESP_RETURN_ON_ERROR(sendEvent(e), TAG, "stop event on framebuffer error");
+        ESP_RETURN_ON_ERROR(sendEvent(e), TAG, "stop event enqueue failed after a framebuffer error");
         // return ESP_FAIL;
     } else if(fb_status == FbComputeStatus::ERROR_CRITICAL) {
-        ESP_LOGE(TAG, "framebuffer compute critical error, restarting...");
+        ESP_LOGE(TAG, "playback stopped after a critical framebuffer error: playback_ms=%llu", (unsigned long long)time_ms);
         Event e{};
         e.type = EVENT_STOP;
-        ESP_RETURN_ON_ERROR(sendEvent(e), TAG, "stop event on framebuffer error");
+        ESP_RETURN_ON_ERROR(sendEvent(e), TAG, "stop event enqueue failed after a critical framebuffer error");
     }
 
     frame_data* buf = fb.get_buffer();
@@ -158,7 +158,7 @@ esp_err_t Player::updatePlayback() {
     if(fb_status == FbComputeStatus::EOF_REACHED) {
         Event e{};
         e.type = EVENT_STOP;
-        ESP_RETURN_ON_ERROR(sendEvent(e), TAG, "failed to enqueue stop event on EOF");
+        ESP_RETURN_ON_ERROR(sendEvent(e), TAG, "stop event enqueue failed at end of playback");
     }
 
     return ESP_OK;
@@ -184,8 +184,16 @@ esp_err_t Player::createTask() {
     eventQueue = xQueueCreate(LD_CFG_PLAYER_EVENT_QUEUE_LEN, sizeof(Event));
     BaseType_t res = xTaskCreatePinnedToCore(Player::taskEntry, LD_CFG_PLAYER_TASK_NAME, LD_CFG_PLAYER_TASK_STACK_SIZE, NULL, LD_CFG_PLAYER_TASK_PRIORITY, &taskHandle, LD_CFG_PLAYER_TASK_CORE_ID);
 
-    ESP_RETURN_ON_FALSE(res == pdPASS, ESP_FAIL, TAG, "create task failed");
+    ESP_RETURN_ON_FALSE(res == pdPASS,
+                        ESP_FAIL,
+                        TAG,
+                        "player task creation failed: name=%s stack_size=%u priority=%u core=%d",
+                        LD_CFG_PLAYER_TASK_NAME,
+                        (unsigned)LD_CFG_PLAYER_TASK_STACK_SIZE,
+                        (unsigned)LD_CFG_PLAYER_TASK_PRIORITY,
+                        LD_CFG_PLAYER_TASK_CORE_ID);
     taskAlive = true;
+    ESP_LOGI(TAG, "player task started");
     return ESP_OK;
 }
 
@@ -229,15 +237,15 @@ void Player::Loop() {
         eventQueue = nullptr;
     }
     taskAlive = false;
-    ESP_LOGI(TAG, "player task exit");
+    ESP_LOGI(TAG, "player task stopped");
     vTaskDelete(NULL);
 }
 
 /* ================= Event sending ================= */
 
 esp_err_t Player::sendEvent(Event& event) {
-    ESP_RETURN_ON_FALSE(taskAlive && eventQueue != nullptr, ESP_ERR_INVALID_STATE, TAG, "player not ready");
-    ESP_RETURN_ON_FALSE(xQueueSend(eventQueue, &event, 0) == pdTRUE, ESP_ERR_TIMEOUT, TAG, "event queue full");
+    ESP_RETURN_ON_FALSE(taskAlive && eventQueue != nullptr, ESP_ERR_INVALID_STATE, TAG, "event rejected: player task is not ready event_type=%d", (int)event.type);
+    ESP_RETURN_ON_FALSE(xQueueSend(eventQueue, &event, 0) == pdTRUE, ESP_ERR_TIMEOUT, TAG, "event queue full: event_type=%d queue_length=%u", (int)event.type, (unsigned)LD_CFG_PLAYER_EVENT_QUEUE_LEN);
     xTaskNotify(taskHandle, NOTIFICATION_EVENT, eSetBits);
     return ESP_OK;
 }
@@ -247,11 +255,11 @@ esp_err_t Player::acquireResources() {
         return ESP_OK;
     }
 
-    ESP_RETURN_ON_FALSE(eventQueue != nullptr, ESP_ERR_NO_MEM, TAG, "eventQueue is NULL");
-    ESP_RETURN_ON_ERROR(controller.init(), TAG, "controller init failed");
-    ESP_RETURN_ON_ERROR(fb.init(), TAG, "framebuffer init failed");
-    ESP_RETURN_ON_FALSE(LD_CFG_PLAYER_FPS > 0, ESP_ERR_INVALID_ARG, TAG, "invalid player fps");
-    ESP_RETURN_ON_ERROR(clock.init(true, taskHandle, 1000000 / LD_CFG_PLAYER_FPS), TAG, "clock init failed");
+    ESP_RETURN_ON_FALSE(eventQueue != nullptr, ESP_ERR_NO_MEM, TAG, "resource acquisition failed: event queue is NULL");
+    ESP_RETURN_ON_ERROR(controller.init(), TAG, "resource acquisition failed: LED controller initialization error");
+    ESP_RETURN_ON_ERROR(fb.init(), TAG, "resource acquisition failed: framebuffer initialization error");
+    ESP_RETURN_ON_FALSE(LD_CFG_PLAYER_FPS > 0, ESP_ERR_INVALID_ARG, TAG, "resource acquisition failed: configured FPS must be greater than zero");
+    ESP_RETURN_ON_ERROR(clock.init(true, taskHandle, 1000000 / LD_CFG_PLAYER_FPS), TAG, "resource acquisition failed: clock initialization error");
 
     resources_acquired = true;
     return ESP_OK;
@@ -262,9 +270,9 @@ esp_err_t Player::releaseResources() {
         return ESP_OK;
     }
 
-    ESP_RETURN_ON_ERROR(clock.deinit(), TAG, "clock deinit failed");
-    ESP_RETURN_ON_ERROR(fb.deinit(), TAG, "framebuffer deinit failed");
-    ESP_RETURN_ON_ERROR(controller.deinit(), TAG, "controller deinit failed");
+    ESP_RETURN_ON_ERROR(clock.deinit(), TAG, "resource release failed: clock deinitialization error");
+    ESP_RETURN_ON_ERROR(fb.deinit(), TAG, "resource release failed: framebuffer deinitialization error");
+    ESP_RETURN_ON_ERROR(controller.deinit(), TAG, "resource release failed: LED controller deinitialization error");
 
     resources_acquired = false;
     return ESP_OK;
