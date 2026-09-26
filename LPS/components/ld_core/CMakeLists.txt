@@ -3,6 +3,6 @@ idf_component_register(
 
     INCLUDE_DIRS "inc"
 
-    REQUIRES driver 
+    REQUIRES esp_driver_gpio
 )
 

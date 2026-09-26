@@ -20,7 +20,8 @@ enum class FbComputeStatus : uint8_t {
     OK = 0,
     HOLD,
     EOF_REACHED,
-    ERROR,
+    ERROR_GENERAL,
+    ERROR_CRITICAL,
 };
 
 class FrameBuffer {
@@ -31,6 +32,8 @@ class FrameBuffer {
     esp_err_t init();
     esp_err_t reset();
     esp_err_t deinit();
+
+    esp_err_t seek(uint64_t time_ms);
 
     FbComputeStatus compute(uint64_t time_ms);
 
@@ -52,7 +55,6 @@ class FrameBuffer {
     void brightness_correction();
 
     table_frame_t frame0{}, frame1{};
-
     table_frame_t* current;
     table_frame_t* next;
 

@@ -33,6 +33,8 @@ class Player {
     esp_err_t test();
     esp_err_t test(uint8_t, uint8_t, uint8_t);
     esp_err_t exit();
+    esp_err_t seek(uint32_t start_time_us);
+    esp_err_t set_time_us(uint32_t start_time_us);
     uint8_t getState() {
         return (uint8_t)m_state;
     }
@@ -45,6 +47,7 @@ class Player {
     esp_err_t resetPlayback();
     esp_err_t updatePlayback();
     esp_err_t testPlayback(TestData);
+    esp_err_t exitPlayback();
 
     // ===== FSM =====
 

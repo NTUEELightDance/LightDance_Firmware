@@ -5,7 +5,7 @@
 #include "esp_check.h"
 #include "esp_log.h"
 
-static const char* TAG = "WS2812";
+static const char* TAG = "WS2812B";
 
 // Config: One-shot transmission, idle low (reset), non-blocking
 static const rmt_transmit_config_t rmt_tx_config = {
@@ -19,8 +19,8 @@ static const rmt_transmit_config_t rmt_tx_config = {
 
 static esp_err_t ws2812b_init_channel(gpio_num_t gpio_num, uint16_t pixel_num, rmt_channel_handle_t* channel) {
     // Check for critical null pointer and hardware validity
-    ESP_RETURN_ON_FALSE(channel, ESP_ERR_INVALID_ARG, TAG, "Channel pointer is invalid");
-    ESP_RETURN_ON_FALSE(GPIO_IS_VALID_OUTPUT_GPIO(gpio_num), ESP_ERR_INVALID_ARG, TAG, "Invalid GPIO %d", gpio_num);
+    ESP_RETURN_ON_FALSE(channel, ESP_ERR_INVALID_ARG, TAG, "RMT channel initialization rejected: output handle pointer is NULL");
+    ESP_RETURN_ON_FALSE(GPIO_IS_VALID_OUTPUT_GPIO(gpio_num), ESP_ERR_INVALID_ARG, TAG, "RMT channel initialization rejected: invalid output GPIO=%d", gpio_num);
 
     rmt_tx_channel_config_t rmt_tx_channel_config = {
         .gpio_num = gpio_num,
@@ -33,7 +33,7 @@ static esp_err_t ws2812b_init_channel(gpio_num_t gpio_num, uint16_t pixel_num, r
     };
 
     // Attempt to create channel, auto-log error if fails
-    ESP_RETURN_ON_ERROR(rmt_new_tx_channel(&rmt_tx_channel_config, channel), TAG, "RMT create failed on GPIO %d", gpio_num);
+    ESP_RETURN_ON_ERROR(rmt_new_tx_channel(&rmt_tx_channel_config, channel), TAG, "RMT TX channel creation failed: gpio=%d", gpio_num);
 
     return ESP_OK;
 }
@@ -42,8 +42,14 @@ esp_err_t ws2812b_init(ws2812b_dev_t* ws2812b, gpio_num_t gpio_num, uint16_t pix
     esp_err_t ret = ESP_OK;
 
     // 1. Validation
-    ESP_GOTO_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, err, TAG, "dev is NULL");
-    ESP_GOTO_ON_FALSE(pixel_num > 0 && pixel_num <= LD_BOARD_WS2812B_MAX_PIXEL_NUM, ESP_ERR_INVALID_ARG, err, TAG, "pixel_num out of range (max=%d)", LD_BOARD_WS2812B_MAX_PIXEL_NUM);
+    ESP_GOTO_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, err, TAG, "device initialization rejected: device pointer is NULL");
+    ESP_GOTO_ON_FALSE(pixel_num > 0 && pixel_num <= LD_BOARD_WS2812B_MAX_PIXEL_NUM,
+                      ESP_ERR_INVALID_ARG,
+                      err,
+                      TAG,
+                      "device initialization rejected: pixels=%u valid_range=1..%d",
+                      pixel_num,
+                      LD_BOARD_WS2812B_MAX_PIXEL_NUM);
 
     // 2. Clear device (important!)
     memset(ws2812b, 0, sizeof(ws2812b_dev_t));
@@ -52,21 +58,26 @@ esp_err_t ws2812b_init(ws2812b_dev_t* ws2812b, gpio_num_t gpio_num, uint16_t pix
     ws2812b->pixel_num = pixel_num;
 
     // 3. RMT Encoder Setup
-    ESP_GOTO_ON_ERROR(rmt_new_encoder(&ws2812b->rmt_encoder), err, TAG, "Encoder creation failed");
+    ESP_GOTO_ON_ERROR(rmt_new_encoder(&ws2812b->rmt_encoder), err, TAG, "RMT encoder creation failed: gpio=%d", gpio_num);
 
     // 4. RMT Channel Setup
-    ESP_GOTO_ON_ERROR(ws2812b_init_channel(gpio_num, pixel_num, &ws2812b->rmt_channel), err, TAG, "Channel init failed");
-    ESP_GOTO_ON_ERROR(gpio_set_drive_capability(gpio_num, GPIO_DRIVE_CAP_0), err, TAG, "Failed to set drive capability");
+    ESP_GOTO_ON_ERROR(ws2812b_init_channel(gpio_num, pixel_num, &ws2812b->rmt_channel), err, TAG, "RMT channel initialization failed: gpio=%d", gpio_num);
+    ESP_GOTO_ON_ERROR(gpio_set_drive_capability(gpio_num, GPIO_DRIVE_CAP_0), err, TAG, "GPIO drive capability setup failed: gpio=%d", gpio_num);
 
     // 5. Enable RMT
-    ESP_GOTO_ON_ERROR(rmt_enable(ws2812b->rmt_channel), err, TAG, "RMT enable failed");
+    ESP_GOTO_ON_ERROR(rmt_enable(ws2812b->rmt_channel), err, TAG, "RMT channel enable failed: gpio=%d", gpio_num);
 
     // 6. Clear LEDs (buffer is already zeroed)
-    ESP_GOTO_ON_ERROR(rmt_transmit(ws2812b->rmt_channel, ws2812b->rmt_encoder, ws2812b->buffer, pixel_num * 3, &rmt_tx_config), err, TAG, "Failed to clear LEDs");
+    ESP_GOTO_ON_ERROR(rmt_transmit(ws2812b->rmt_channel, ws2812b->rmt_encoder, ws2812b->buffer, pixel_num * 3, &rmt_tx_config),
+                      err,
+                      TAG,
+                      "initial blackout transmission failed: gpio=%d pixels=%u",
+                      gpio_num,
+                      pixel_num);
 
     rmt_tx_wait_all_done(ws2812b->rmt_channel, LD_CFG_RMT_TIMEOUT_MS);
 
-    ESP_LOGI(TAG, "WS2812B initialized (GPIO=%d, pixels=%d)", gpio_num, pixel_num);
+    ESP_LOGD(TAG, "device initialized: gpio=%d pixels=%u", gpio_num, pixel_num);
 
     return ESP_OK;
 
@@ -84,11 +95,11 @@ err:
 
 esp_err_t ws2812b_write_grb(ws2812b_dev_t* ws2812b, const grb8_t* colors, uint16_t count) {
     // 1. Validate Handle
-    ESP_RETURN_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, TAG, "Handle is NULL");
+    ESP_RETURN_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, TAG, "buffer write rejected: device pointer is NULL");
 
     // 2. Validate Source Buffer
-    ESP_RETURN_ON_FALSE(colors, ESP_ERR_INVALID_ARG, TAG, "Source buffer is NULL");
-    ESP_RETURN_ON_FALSE(count <= ws2812b->pixel_num, ESP_ERR_INVALID_ARG, TAG, "count out of range (max=%d)", ws2812b->pixel_num);
+    ESP_RETURN_ON_FALSE(colors, ESP_ERR_INVALID_ARG, TAG, "buffer write rejected: source color buffer is NULL");
+    ESP_RETURN_ON_FALSE(count <= ws2812b->pixel_num, ESP_ERR_INVALID_ARG, TAG, "buffer write rejected: requested_pixels=%u configured_pixels=%u", count, ws2812b->pixel_num);
 
     // 4. Perform Fast Copy
     memcpy(ws2812b->buffer, (const uint8_t*)colors, count * sizeof(grb8_t));
@@ -98,10 +109,10 @@ esp_err_t ws2812b_write_grb(ws2812b_dev_t* ws2812b, const grb8_t* colors, uint16
 
 esp_err_t ws2812b_wait_done(ws2812b_dev_t* ws2812b) {
     // 1. Safety Check
-    ESP_RETURN_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, TAG, "Handle is NULL");
+    ESP_RETURN_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, TAG, "transmission wait rejected: device pointer is NULL");
 
     // 2. State Check
-    ESP_RETURN_ON_FALSE(ws2812b->rmt_channel, ESP_ERR_INVALID_STATE, TAG, "RMT channel not initialized");
+    ESP_RETURN_ON_FALSE(ws2812b->rmt_channel, ESP_ERR_INVALID_STATE, TAG, "transmission wait rejected: RMT channel is not initialized gpio=%d", ws2812b->gpio_num);
 
     // 3. Wait for Done
     return rmt_tx_wait_all_done(ws2812b->rmt_channel, LD_CFG_RMT_TIMEOUT_MS);
@@ -109,15 +120,19 @@ esp_err_t ws2812b_wait_done(ws2812b_dev_t* ws2812b) {
 
 esp_err_t ws2812b_show(ws2812b_dev_t* ws2812b) {
     // 1. Basic Pointer Validation
-    ESP_RETURN_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, TAG, "Handle is NULL");
+    ESP_RETURN_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, TAG, "transmission rejected: device pointer is NULL");
 
     // 2. State Validation
-    ESP_RETURN_ON_FALSE(ws2812b->rmt_channel && ws2812b->rmt_encoder, ESP_ERR_INVALID_STATE, TAG, "RMT not initialized");
+    ESP_RETURN_ON_FALSE(ws2812b->rmt_channel && ws2812b->rmt_encoder, ESP_ERR_INVALID_STATE, TAG, "transmission rejected: RMT resources are not initialized gpio=%d", ws2812b->gpio_num);
 
     // 3. Transmit
     size_t payload_size = ws2812b->pixel_num * 3;
 
-    ESP_RETURN_ON_ERROR(rmt_transmit(ws2812b->rmt_channel, ws2812b->rmt_encoder, ws2812b->buffer, payload_size, &rmt_tx_config), TAG, "Failed to transmit");
+    ESP_RETURN_ON_ERROR(rmt_transmit(ws2812b->rmt_channel, ws2812b->rmt_encoder, ws2812b->buffer, payload_size, &rmt_tx_config),
+                        TAG,
+                        "RMT transmission failed: gpio=%d payload_size=%u bytes",
+                        ws2812b->gpio_num,
+                        (unsigned)payload_size);
 
     return ESP_OK;
 }
@@ -149,18 +164,18 @@ esp_err_t ws2812b_del(ws2812b_dev_t* ws2812b) {
         ws2812b->rmt_encoder = NULL;
     }
 
-    ESP_LOGI(TAG, "WS2812B (GPIO %d, pixels=%d) de-initialized", ws2812b->gpio_num, ws2812b->pixel_num);
+    ESP_LOGD(TAG, "device deinitialized: gpio=%d pixels=%u", ws2812b->gpio_num, ws2812b->pixel_num);
 
     return ESP_OK;
 }
 
 esp_err_t ws2812b_set_pixel(ws2812b_dev_t* ws2812b, int pixel_idx, grb8_t color) {
     // 1. Check if handle exists
-    ESP_RETURN_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, TAG, "Handle is NULL");
+    ESP_RETURN_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, TAG, "pixel write rejected: device pointer is NULL");
 
     // 2. Check for Buffer Overflow (CRITICAL)
     if(pixel_idx < 0 || pixel_idx >= ws2812b->pixel_num) {
-        ESP_LOGW(TAG, "Pixel index %d out of bounds (Max: %d)", pixel_idx, ws2812b->pixel_num);
+        ESP_LOGE(TAG, "pixel write rejected: index=%d valid_range=0..%d gpio=%d", pixel_idx, ws2812b->pixel_num - 1, ws2812b->gpio_num);
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -175,7 +190,7 @@ esp_err_t ws2812b_set_pixel(ws2812b_dev_t* ws2812b, int pixel_idx, grb8_t color)
 
 esp_err_t ws2812b_fill(ws2812b_dev_t* ws2812b, grb8_t color) {
     // 1. Validation
-    ESP_RETURN_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, TAG, "Handle is NULL");
+    ESP_RETURN_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, TAG, "fill rejected: device pointer is NULL");
 
     // 2. Optimization check
     // If all colors are 0 (turning off), memset is significantly faster than a loop
@@ -198,16 +213,16 @@ esp_err_t ws2812b_fill(ws2812b_dev_t* ws2812b, grb8_t color) {
 
 esp_err_t ws2812b_print_buffer(ws2812b_dev_t* ws2812b) {
     // 1. Validation
-    ESP_RETURN_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, TAG, "Handle is NULL");
+    ESP_RETURN_ON_FALSE(ws2812b, ESP_ERR_INVALID_ARG, TAG, "buffer dump rejected: device pointer is NULL");
 
     // 2. Log Header
-    ESP_LOGD(TAG, "Dumping Buffer (%d pixels, GRB format):", ws2812b->pixel_num);
+    ESP_LOGV(TAG, "buffer dump: gpio=%d pixels=%u format=GRB", ws2812b->gpio_num, ws2812b->pixel_num);
 
     // 3. Hex Dump
     // ESP-IDF built-in function.
     // It prints the memory address offset and data in a readable 16-byte-per-line format.
     // LOG_LEVEL_INFO ensures it only prints if the log level is appropriate.
-    ESP_LOG_BUFFER_HEXDUMP(TAG, ws2812b->buffer, ws2812b->pixel_num * 3, ESP_LOG_DEBUG);
+    ESP_LOG_BUFFER_HEXDUMP(TAG, ws2812b->buffer, ws2812b->pixel_num * 3, ESP_LOG_VERBOSE);
 
     return ESP_OK;
 }

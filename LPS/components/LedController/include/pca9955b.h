@@ -30,6 +30,8 @@ typedef struct {
     pca9955b_buffer_t buffer; /*!< PWM register + LED color buffer */
 
     bool need_reset_IREF; /*!< Set true if IREF register needs to be reinitialized */
+    bool iref_loss;
+    bool overtemp;
 } pca9955b_dev_t;
 
 /* Bus lifecycle */
@@ -46,6 +48,9 @@ esp_err_t pca9955b_fill(pca9955b_dev_t* pca9955b, grb8_t color);
 
 /* Transmission */
 esp_err_t pca9955b_show(pca9955b_dev_t* pca9955b);
+
+bool pca9955b_check_iref(pca9955b_dev_t* pca9955b);
+bool pca9955b_check_overtemp(pca9955b_dev_t* pca9955b);
 
 #ifdef __cplusplus
 }

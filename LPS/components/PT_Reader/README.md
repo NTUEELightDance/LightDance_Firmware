@@ -1,6 +1,8 @@
 # Pattern Table Reader System v1.2 Guide 
 
-This document explains what the pattern table reader system provides, how to use it correctly, and what assumptions the system makes. 
+This document describes the architecture, finite state machine (FSM), APIs, and expected behaviors of the Pattern Table Reader System.
+
+The system is designed to safely read control.dat and frame.dat from SD card with deterministic state transitions and strict error handling.
 
 ## 1. Finite State Machine
 
@@ -39,21 +41,18 @@ direction TB
 
     INITED --> UNINIT: frame_system_deinit()
 
-    STOPPED
-
-    note right of STOPPED: any error occur
+    note right of STOPPED: internal fatal error
 ```
 
 Description of each state :
 
 
-|  State   | Description  | Static variable  |
-|  :---:  | :---  | :---  |
-| UNINIT  | Pattern table reader system not yet initialize | inited = 0 <br> running = 0 <br> eof_reached = 0 |
-| INITED  | Pattern table reader system inited, ready to read | inited = 1 <br> running = 1 <br> eof_reached = 0 |
-| ACTIVE  | System is reading frame | inited = 1 <br> running = 1 <br> eof_reached = 0 |
-| EOF  | Frame reader reach end of file in frame.dat | inited = 1 <br> running = 1 <br> eof_reached = 1 |
-| STOPPED  | System deinitialized, resources released | inited = 0 <br> running = 0 <br> eof_reached = 0 |
+| State       | Description                         | Internal Flags                                   |
+| ----------- | ----------------------------------- | ------------------------------------------------ |
+| **UNINIT**  | System not initialized              | inited = 0 <br> running = 0 <br> eof_reached = 0 |
+| **INITED**  | System initialized, ready to read   | inited = 1 <br> running = 0 <br> eof_reached = 0 |
+| **ACTIVE**  | Reader is actively reading frames   | inited = 1 <br> running = 1 <br> eof_reached = 0 |
+| **EOF**     | End of frame.dat reached            | inited = 1 <br> running = 1 <br> eof_reached = 1 |
 
 
 ## 2. FSM API
@@ -68,22 +67,21 @@ Initialize the pattern table reader system
 | INITED  | INITED | ESP_ERR_INVALID_STATE |
 | ACTIVE  | ACTIVE | ESP_ERR_INVALID_STATE |
 | EOF  | EOF | ESP_ERR_INVALID_STATE |
-| STOPPED  | STOPPED | ESP_ERR_INVALID_STATE |
 
 <br>
 
 - Detail Error Code Reference
 
-|  Return type   |  Description |
-|  :---  | :---  |
-| ESP_ERR_INVALID_STATE  | System already initialized (inited = True) |
-| ESP_ERR_INVALID_ARG  | Invalid control_path or frame_path |
-| ESP_ERR_NOT_FOUND  | control.dat or frame.dat missing on SD card |
-| ESP_FAIL | Version mismatch or I/O error |
-| ESP_ERR_INVALID_RESPONSE | control.dat format error (invalid values) |
-| ESP_ERR_NO_MEM | Out of memory |
-| ESP_ERR_INVALID_SIZE | Calculated frame size exceeds FRAME_RAW_MAX_SIZE |
-| ESP_ERR_INVALID_CRC | Checksum mismatch in control.dat |
+| Return                   | Description                           |
+| ------------------------ | ------------------------------------- |
+| ESP_ERR_INVALID_STATE    | System already initialized            |
+| ESP_ERR_INVALID_ARG      | control_path or frame_path invalid    |
+| ESP_ERR_NOT_FOUND        | control.dat or frame.dat missing      |
+| ESP_FAIL                 | I/O error or version mismatch         |
+| ESP_ERR_INVALID_RESPONSE | control.dat format invalid            |
+| ESP_ERR_NO_MEM           | Memory allocation failed              |
+| ESP_ERR_INVALID_SIZE     | Frame size exceeds FRAME_RAW_MAX_SIZE |
+| ESP_ERR_INVALID_CRC      | control.dat checksum mismatch         |
 
 ---
 
@@ -98,7 +96,6 @@ Reading next frame data
 | ACTIVE  | ACTIVE | ESP_OK |
 | ACTIVE  | EOF | ESP_ERR_NOT_FOUND |
 | EOF  | EOF | ESP_ERR_NOT_FOUND |
-| STOPPED  | STOPPED | ESP_ERR_INVALID_STATE |
 
 <br>
 
@@ -106,7 +103,7 @@ Reading next frame data
 
 |  Return type   |  Description |
 |  :---  | :---  |
-| ESP_ERR_INVALID_STATE  | Called in UNINIT or STOPPED state |
+| ESP_ERR_INVALID_STATE  | System not initialized (UNINIT state) |
 | ESP_ERR_NOT_FOUND  | No more frames to read, system enters EOF state |
 | ESP_ERR_INVALID_SIZE | Frame file corrupted: incomplete frame read (expected size mismatch) |
 | ESP_ERR_INVALID_ARG  | Invalid playerbuffer or NULL |
@@ -125,7 +122,6 @@ Reset reader pointer back to start of frame.dat (frame 0)
 | INITED  | INITED | ESP_OK |
 | ACTIVE  | INITED | ESP_OK |
 | EOF  | INITED | ESP_OK |
-| STOPPED  | STOPPED | ESP_ERR_INVALID_STATE |
 
 ---
 
@@ -146,9 +142,3 @@ Leave and close the pattern table reader system, release resource
 ### is_eof_reached(void)
 
 - return eof_reached ( True / False )
-
-### get_sd_card_id(void)
-
-- return ID 1~31 if label of SD card is "LPS01" ~ "LPS31"
-
-- return 0 for other cases
