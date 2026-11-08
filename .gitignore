@@ -1,0 +1,87 @@
+# Shared rules for this repository and its project directories.
+# Git submodules maintain their own ignore rules.
+
+# ESP-IDF / CMake build outputs
+build/
+build-*/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+Testing/
+compile_commands.json
+build.ninja
+rules.ninja
+.ninja_deps
+.ninja_log
+
+# ESP-IDF downloaded components, local tools, and config backups
+managed_components/
+**/components/.idf/
+.espressif/
+sdkconfig.old
+sdkconfig.*.old
+flasher_args.json
+# Keep sdkconfig, sdkconfig.defaults*, partitions.csv, and dependencies.lock tracked.
+# Firmware .bin files generated under build/ are already ignored.
+
+# Compiled artifacts
+*.o
+*.obj
+*.a
+*.elf
+*.map
+*.out
+*.exe
+
+# Python bytecode, environments, packaging, and tool caches
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+
+# Generated pattern tables (gen_breath.py writes to the working directory)
+control.dat
+frame.dat
+
+# Local editor settings and language-server caches
+.vscode/
+.idea/
+.cache/
+.ccls-cache/
+.clangd/
+# Keep .clangd configuration files and .devcontainer/ tracked.
+
+# Logs, temporary files, and editor backups
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+
+# Operating-system metadata
+.DS_Store
+._*
+.AppleDouble
+.LSOverride
+.Spotlight-V100/
+.Trashes/
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.directory
